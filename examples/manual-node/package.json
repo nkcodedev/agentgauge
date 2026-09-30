@@ -1,0 +1,17 @@
+{
+  "name": "@agentgauge/manual-node-example",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agentgauge/node": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

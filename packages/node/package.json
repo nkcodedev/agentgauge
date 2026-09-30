@@ -1,0 +1,51 @@
+{
+  "name": "@agentgauge/node",
+  "version": "0.1.0",
+  "description": "Node.js SDK for AgentGauge manual AI agent tracing and telemetry",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "observability",
+    "telemetry",
+    "llm",
+    "tracing",
+    "typescript",
+    "nodejs"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agentgauge/core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}
