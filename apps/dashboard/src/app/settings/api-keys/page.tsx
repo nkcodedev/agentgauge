@@ -1,6 +1,5 @@
 import { ApiError, fetchApiKeys } from "@/lib/api-client";
 import { hasServerApiKey } from "@/lib/env";
-import { MobileNav } from "@/components/range-filter";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { ApiKeysManager } from "@/components/api-keys-manager";
 
@@ -9,10 +8,9 @@ export const dynamic = "force-dynamic";
 export default async function ApiKeysPage() {
   return (
     <div>
-      <MobileNav />
       <PageHeader
         title="API keys"
-        description="Create and revoke project API keys. The full plaintext key is shown only once at creation."
+        description="Create and revoke project API keys. The full plaintext key is shown only once at creation. The dashboard reads AGENTGAUGE_API_KEY on the server; the browser never receives it."
       />
       <ApiKeysBody />
     </div>

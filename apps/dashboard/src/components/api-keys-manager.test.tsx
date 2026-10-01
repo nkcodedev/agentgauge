@@ -73,8 +73,10 @@ describe("ApiKeysManager", () => {
       />,
     );
 
-    await user.click(screen.getAllByRole("button", { name: /Revoke/i })[0]!);
+    await user.click(screen.getAllByRole("button", { name: /^Revoke$/i })[0]!);
+    await user.click(screen.getByRole("button", { name: /Revoke key/i }));
     await waitFor(() => {
+      expect(screen.getByText("Key revoked")).toBeInTheDocument();
       expect(screen.getByText("revoked")).toBeInTheDocument();
     });
   });

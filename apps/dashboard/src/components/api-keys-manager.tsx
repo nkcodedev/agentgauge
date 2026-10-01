@@ -26,6 +26,8 @@ export function ApiKeysManager({ initialKeys }: { initialKeys: ApiKeyListItem[] 
   const [created, setCreated] = useState<CreatedApiKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
@@ -97,15 +99,45 @@ export function ApiKeysManager({ initialKeys }: { initialKeys: ApiKeyListItem[] 
         </form>
         {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
         {created ? (
-          <div
-            role="status"
-            className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"
-          >
-            <p className="font-medium">Copy this key now. It will not be shown again.</p>
-            <code className="mt-2 block break-all rounded bg-white px-2 py-2 font-mono text-xs">
-              {created.apiKey}
-            </code>
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="absolute inset-0 bg-fg/20" />
+            <div
+              role="status"
+              className="relative z-10 w-full max-w-lg rounded-panel border border-line bg-surface p-4 shadow-overlay"
+            >
+              <p className="font-medium text-fg">Copy this key now. It will not be shown again.</p>
+              <code className="mt-3 block break-all rounded-control bg-muted px-2 py-2 font-mono text-2xs">
+                {created.apiKey}
+              </code>
+              <pre className="mt-3 overflow-x-auto rounded-control bg-muted p-3 text-2xs">{`npm install @agentgauge/node
+
+const gauge = new AgentGauge({
+  apiKey: "${created.apiKey}",
+  endpoint: "http://localhost:3000",
+});`}</pre>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-control bg-fg px-3 py-2 text-sm text-surface"
+                  onClick={() => void navigator.clipboard.writeText(created.apiKey)}
+                >
+                  Copy key
+                </button>
+                <button
+                  type="button"
+                  className="text-sm text-secondary"
+                  onClick={() => setCreated(null)}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
           </div>
+        ) : null}
+        {toast ? (
+          <p role="status" className="mt-3 text-sm text-ok">
+            {toast}
+          </p>
         ) : null}
       </Card>
 
@@ -140,22 +172,9 @@ export function ApiKeysManager({ initialKeys }: { initialKeys: ApiKeyListItem[] 
                     {!key.revokedAt ? (
                       <button
                         type="button"
-                        className="text-sm text-red-700"
+                        className="text-sm text-bad"
                         disabled={pending}
-                        onClick={() => {
-                          setError(null);
-                          startTransition(async () => {
-                            try {
-                              const revoked = await proxyJson<ApiKeyListItem>(
-                                `/api/backend/v1/api-keys/${encodeURIComponent(key.id)}/revoke`,
-                                { method: "POST" },
-                              );
-                              setKeys((prev) => prev.map((k) => (k.id === key.id ? revoked : k)));
-                            } catch (err) {
-                              setError(err instanceof Error ? err.message : "Failed to revoke key");
-                            }
-                          });
-                        }}
+                        onClick={() => setConfirmId(key.id)}
                       >
                         Revoke
                       </button>
@@ -169,6 +188,55 @@ export function ApiKeysManager({ initialKeys }: { initialKeys: ApiKeyListItem[] 
           </table>
         </div>
       </Card>
+      {confirmId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0 bg-fg/20"
+            onClick={() => setConfirmId(null)}
+          />
+          <div
+            role="dialog"
+            aria-label="Revoke API key"
+            className="relative z-10 w-full max-w-sm rounded-panel border border-line bg-surface p-4 shadow-overlay"
+          >
+            <p className="text-sm text-fg">Revoke this key? Requests using it will fail.</p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                className="rounded-control bg-bad px-3 py-2 text-sm text-white"
+                onClick={() => {
+                  const id = confirmId;
+                  setConfirmId(null);
+                  setError(null);
+                  startTransition(async () => {
+                    try {
+                      const revoked = await proxyJson<ApiKeyListItem>(
+                        `/api/backend/v1/api-keys/${encodeURIComponent(id)}/revoke`,
+                        { method: "POST" },
+                      );
+                      setKeys((prev) => prev.map((k) => (k.id === id ? revoked : k)));
+                      setToast("Key revoked");
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to revoke key");
+                    }
+                  });
+                }}
+              >
+                Revoke key
+              </button>
+              <button
+                type="button"
+                className="text-sm text-secondary"
+                onClick={() => setConfirmId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
