@@ -74,6 +74,15 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
+/** USD per 1M tokens. Whole dollars use 2 places; smaller rates keep 4. */
+export function formatPricePerMillion(value: string | number): string {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n) >= 1) return `$${n.toFixed(2)}`;
+  if (Math.abs(n) >= 0.0001) return `$${n.toFixed(4)}`;
+  return `$${n.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")}`;
+}
+
 export function formatLatency(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`;
   return `${(ms / 1000).toFixed(2)} s`;

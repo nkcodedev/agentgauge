@@ -352,4 +352,71 @@ describe("API integration", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("accepts synthetic anthropic and google traces and aggregates byProvider", async () => {
+    const anthropic = makeTraceEvent({
+      project: tenant.projectSlug,
+      agentId: "multi-provider-agent",
+      provider: "anthropic",
+      model: "claude-sonnet-fake",
+      operationName: "anthropic.messages.create",
+      usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      metadata: { usageDetails: { cachedInputTokens: 10 } },
+    });
+    const google = makeTraceEvent({
+      project: tenant.projectSlug,
+      agentId: "multi-provider-agent",
+      provider: "google",
+      model: "gemini-fake",
+      operationName: "google.models.generateContent",
+      usage: { inputTokens: 80, outputTokens: 20, totalTokens: 100 },
+      metadata: { usageDetails: { reasoningTokens: 5 } },
+    });
+
+    for (const event of [anthropic, google]) {
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/traces",
+        headers: { authorization: tenant.authHeader },
+        payload: { events: [event] },
+      });
+      expect(res.statusCode).toBe(202);
+
+      const rows = await tenant.db.select().from(traces).where(eq(traces.eventId, event.eventId));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.provider).toBe(event.provider);
+      expect(rows[0]!.model).toBe(event.model);
+      expect(rows[0]!.costStatus).toBe("unknown_model");
+      expect(rows[0]!.totalCost).toBeNull();
+      expect(rows[0]!.inputTokens).toBe(event.usage.inputTokens);
+    }
+
+    const usage = await app.inject({
+      method: "GET",
+      url: "/v1/usage",
+      headers: { authorization: tenant.authHeader },
+    });
+    expect(usage.statusCode).toBe(200);
+    const byProvider = usage.json().byProvider as Array<{ key: string; requests: number }>;
+    const keys = byProvider.map((r) => r.key);
+    expect(keys).toEqual(expect.arrayContaining(["openai", "anthropic", "google"]));
+
+    const anthropicFilter = await app.inject({
+      method: "GET",
+      url: "/v1/traces?provider=anthropic",
+      headers: { authorization: tenant.authHeader },
+    });
+    expect(anthropicFilter.statusCode).toBe(200);
+    expect(
+      anthropicFilter.json().data.every((t: { provider: string }) => t.provider === "anthropic"),
+    ).toBe(true);
+
+    const agentsRes = await app.inject({
+      method: "GET",
+      url: "/v1/agents/multi-provider-agent",
+      headers: { authorization: tenant.authHeader },
+    });
+    expect(agentsRes.statusCode).toBe(200);
+    expect(agentsRes.json().requestCount).toBeGreaterThanOrEqual(2);
+  });
 });

@@ -51,6 +51,17 @@ describe("trace schema", () => {
     expect(TraceEventSchema.safeParse(valid).success).toBe(true);
   });
 
+  it("accepts optional run linkage fields", () => {
+    expect(
+      TraceEventSchema.safeParse({
+        ...valid,
+        runId: "run-1",
+        operationId: "op-1",
+        attempt: 2,
+      }).success,
+    ).toBe(true);
+  });
+
   it("rejects deep metadata", () => {
     const result = TraceEventSchema.safeParse({
       ...valid,
@@ -66,5 +77,36 @@ describe("trace schema", () => {
       traceId: `t${i}`,
     }));
     expect(IngestBodySchema.safeParse({ events }).success).toBe(false);
+  });
+
+  it("accepts anthropic/google providers and usageDetails metadata", () => {
+    expect(
+      TraceEventSchema.safeParse({
+        ...valid,
+        provider: "anthropic",
+        model: "claude-sonnet-fake",
+        operationName: "anthropic.messages.create",
+        metadata: { usageDetails: { cachedInputTokens: 3 } },
+      }).success,
+    ).toBe(true);
+
+    expect(
+      TraceEventSchema.safeParse({
+        ...valid,
+        provider: "google",
+        model: "gemini-fake",
+        operationName: "google.models.generateContent",
+        metadata: { usageDetails: { reasoningTokens: 2 } },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects forbidden content metadata keys", () => {
+    expect(
+      TraceEventSchema.safeParse({
+        ...valid,
+        metadata: { messages: [{ role: "user", content: "hi" }] },
+      }).success,
+    ).toBe(false);
   });
 });

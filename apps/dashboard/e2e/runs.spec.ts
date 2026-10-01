@@ -17,7 +17,9 @@ test.describe("runs dashboard", () => {
 
     await page.goto("/runs?range=30d");
     await expect(page.getByRole("heading", { name: "Runs", exact: true })).toBeVisible();
-    await expect(page.getByTestId("live-indicator")).toBeVisible();
+    await expect(page.getByTestId("live-indicator")).toHaveAttribute("data-status", "live", {
+      timeout: 15_000,
+    });
 
     const createRes = await request.post(`${apiUrl}/v1/runs`, {
       headers: {

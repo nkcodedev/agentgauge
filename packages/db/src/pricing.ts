@@ -21,6 +21,13 @@ export interface PricingRow {
   readonly currency: string;
   readonly effectiveFrom: Date;
   readonly effectiveTo: Date | null;
+  /** `override` and `custom` outrank AgentGauge seed rows when both match. */
+  readonly source?: string;
+}
+
+/** Installation-managed rates. Seed rows stay available when no user rate matches. */
+export function isUserPricingSource(source: string | undefined): boolean {
+  return source === "override" || source === "custom";
 }
 
 export interface CostResult {
@@ -82,16 +89,17 @@ export function selectPricing(
   model: string,
   at: Date,
 ): PricingRow | undefined {
-  const candidates = rows
-    .filter(
-      (r) =>
-        r.provider === provider &&
-        r.model === model &&
-        r.effectiveFrom.getTime() <= at.getTime() &&
-        (r.effectiveTo === null || r.effectiveTo.getTime() > at.getTime()),
-    )
-    .sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
-  return candidates[0];
+  const candidates = rows.filter(
+    (r) =>
+      r.provider === provider &&
+      r.model === model &&
+      r.effectiveFrom.getTime() <= at.getTime() &&
+      (r.effectiveTo === null || r.effectiveTo.getTime() > at.getTime()),
+  );
+  const userRates = candidates.filter((r) => isUserPricingSource(r.source));
+  const pool = userRates.length > 0 ? userRates : candidates;
+  pool.sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
+  return pool[0];
 }
 
 export function calculateCost(input: CostInput, pricingRows: readonly PricingRow[]): CostResult {

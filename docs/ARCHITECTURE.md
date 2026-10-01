@@ -1,6 +1,6 @@
 # AgentGauge Architecture
 
-**Status:** Milestone 4.1 (`0.5.0`) — SDK + API + worker + PostgreSQL + real-time dashboard
+**Status:** Milestone Run Observability (`0.7.0` local) — SDK + API + worker + PostgreSQL + real-time dashboard
 **Related:** [API.md](./API.md), [SELF_HOSTING.md](./SELF_HOSTING.md), [SECURITY.md](../SECURITY.md)
 
 ---
@@ -17,6 +17,8 @@ agentgauge/
 │   ├── core/
 │   ├── node/
 │   ├── openai/
+│   ├── anthropic/
+│   ├── gemini/
 │   └── db/
 ├── examples/
 ├── docs/
@@ -33,13 +35,17 @@ SDK → AgentGauge API → PostgreSQL → Cost Engine → ProjectEventBus → SS
 
 Dashboard consumes HTTP APIs only (never imports `@agentgauge/db`). Live updates use lightweight SSE notifications; PostgreSQL query APIs remain the source of truth.
 
+**Runs** sit above traces: `POST /v1/runs` creates a task; traces optionally reference `runId`; `POST /v1/runs/:id/end` sets the explicit final outcome. Aggregates (tokens, cost, errors, retries) are computed in SQL from child traces.
+
 **Limitation:** the in-memory event bus fans out only within a single API process.
+
+SSE event types: `run.created`, `run.updated`, `trace.created`.
 
 ---
 
 ## Boundaries
 
-- `packages/core|node|openai` must not import apps/db/fastify/drizzle
+- `packages/core|node|openai|anthropic|gemini` must not import apps/db/fastify/drizzle
 - `apps/dashboard` must not import `@agentgauge/db`, drizzle, postgres, fastify
 
 Enforced by `scripts/check-boundaries.mjs`.

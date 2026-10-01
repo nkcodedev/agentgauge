@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, desc, sql } from "drizzle-orm";
 import type { Database } from "./client.js";
 import { modelPricing, traces } from "./schema.js";
 import { calculateCost, type PricingRow } from "./pricing.js";
@@ -13,23 +13,38 @@ async function loadPricing(db: Database): Promise<PricingRow[]> {
     currency: r.currency,
     effectiveFrom: r.effectiveFrom,
     effectiveTo: r.effectiveTo,
+    source: r.source,
   }));
 }
 
-/** Enrich traces still marked cost_status=pending (worker / backfill). */
+/**
+ * Enrich traces that still need cost resolution.
+ *
+ * - `pending`: always recompute (ingest race / deferred)
+ * - `unknown_model`: recompute only when pricing can now produce `priced`
+ *   (so newly seeded Anthropic/Google rows can backfill older traces)
+ *
+ * Never rewrites already-`priced` rows.
+ */
 export async function enrichPendingTraces(db: Database, limit = 100): Promise<number> {
-  const pending = await db
+  // Prefer `pending` so deferred ingest rows are not starved by a large
+  // backlog of still-unpriced `unknown_model` rows. Newest first within a tier.
+  const candidates = await db
     .select()
     .from(traces)
-    .where(eq(traces.costStatus, "pending"))
+    .where(inArray(traces.costStatus, ["pending", "unknown_model"]))
+    .orderBy(
+      sql`case when ${traces.costStatus} = 'pending' then 0 else 1 end`,
+      desc(traces.createdAt),
+    )
     .limit(limit);
 
-  if (pending.length === 0) return 0;
+  if (candidates.length === 0) return 0;
 
   const pricingRows = await loadPricing(db);
   let updated = 0;
 
-  for (const row of pending) {
+  for (const row of candidates) {
     const cost = calculateCost(
       {
         ...(row.provider ? { provider: row.provider } : {}),
@@ -40,6 +55,11 @@ export async function enrichPendingTraces(db: Database, limit = 100): Promise<nu
       },
       pricingRows,
     );
+
+    if (row.costStatus === "unknown_model" && cost.status !== "priced") {
+      continue;
+    }
+
     const costStatus =
       cost.status === "priced"
         ? "priced"

@@ -10,7 +10,7 @@ import {
   formatRelative,
   formatRunCost,
 } from "@/lib/format";
-import { Card, StatusPill } from "./ui";
+import { Card, dataCellClass, dataHeadClass, dataTableClass, StatusPill } from "./ui";
 import { RunningDuration } from "./running-duration";
 
 export function RunsTable({
@@ -40,34 +40,40 @@ export function RunsTable({
       <div className="border-b border-ink-200 px-4 py-3 text-sm text-ink-600">
         {runs.length} runs
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-ink-50 text-xs uppercase tracking-wide text-ink-500">
+      <div className="table-scroll">
+        <table className={dataTableClass}>
+          <thead className={dataHeadClass}>
             <tr>
-              <th className="px-4 py-3 font-medium">Run</th>
-              <th className="px-4 py-3 font-medium">Agent</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Requests</th>
-              <th className="px-4 py-3 font-medium">Tokens</th>
-              <th className="px-4 py-3 font-medium">Estimated cost</th>
-              <th className="px-4 py-3 font-medium">Errors</th>
-              <th className="px-4 py-3 font-medium">Retries</th>
-              <th className="px-4 py-3 font-medium">Duration</th>
-              <th className="px-4 py-3 font-medium">Started</th>
+              {[
+                "Run",
+                "Agent",
+                "Status",
+                "Requests",
+                "Tokens",
+                "Estimated cost",
+                "Errors",
+                "Retries",
+                "Duration",
+                "Started",
+              ].map((label) => (
+                <th key={label} className={`${dataCellClass} font-medium`}>
+                  {label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {runs.map((run) => (
               <tr key={run.id} className="border-t border-ink-100 hover:bg-ink-50/80">
-                <td className="px-4 py-3 font-medium">
+                <td className={`${dataCellClass} font-medium`}>
                   <Link href={`/runs/${encodeURIComponent(run.id)}`} className="no-underline">
                     <span className="text-accent">{run.name}</span>
-                    <span className="mt-0.5 block font-mono text-xs font-normal text-ink-500">
+                    <span className="mt-0.5 block font-mono text-xs font-normal text-faint">
                       {run.id}
                     </span>
                   </Link>
                 </td>
-                <td className="px-4 py-3">
+                <td className={dataCellClass}>
                   <Link
                     href={`/agents/${encodeURIComponent(run.agentId)}`}
                     className="no-underline"
@@ -75,29 +81,29 @@ export function RunsTable({
                     {run.agentId}
                   </Link>
                 </td>
-                <td className="px-4 py-3">
+                <td className={dataCellClass}>
                   <StatusPill status={run.status} kind="run" />
                 </td>
-                <td className="px-4 py-3">{formatNumber(run.requestCount)}</td>
-                <td className="px-4 py-3">{formatNumber(run.totalTokens)}</td>
+                <td className={dataCellClass}>{formatNumber(run.requestCount)}</td>
+                <td className={dataCellClass}>{formatNumber(run.totalTokens)}</td>
                 <td
-                  className="px-4 py-3"
+                  className={`${dataCellClass} font-mono text-xs`}
                   title={run.hasUnknownCost ? "Some traces lack pricing" : undefined}
                 >
                   {formatRunCost(run.estimatedCost, run.hasUnknownCost)}
                 </td>
-                <td className="px-4 py-3">{formatNumber(run.errorCount)}</td>
-                <td className="px-4 py-3">
+                <td className={dataCellClass}>{formatNumber(run.errorCount)}</td>
+                <td className={dataCellClass}>
                   {run.retryCount === 1 ? "1 retry" : `${formatNumber(run.retryCount)} retries`}
                 </td>
-                <td className="px-4 py-3">
+                <td className={dataCellClass}>
                   {run.status === "running" ? (
                     <RunningDuration startedAt={run.startedAt} />
                   ) : (
                     formatDurationMs(run.durationMs)
                   )}
                 </td>
-                <td className="px-4 py-3" title={formatAbsolute(run.startedAt)}>
+                <td className={dataCellClass} title={formatAbsolute(run.startedAt)}>
                   {formatRelative(run.startedAt)}
                 </td>
               </tr>

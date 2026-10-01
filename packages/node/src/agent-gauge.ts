@@ -1,18 +1,27 @@
 import {
   ConfigurationError,
+  validateStartRunInput,
   validateStartTraceInput,
+  type StartRunInput,
   type StartTraceInput,
   type TraceEvent,
 } from "@agentgauge/core";
 import { ConsoleTransport } from "./console-transport.js";
 import { HttpTransport } from "./http-transport.js";
+import { ManualRunHandle, type RunHandle } from "./run-handle.js";
 import {
   ManualTraceHandle,
   createTraceContext,
   type TraceEmitter,
   type TraceHandle,
 } from "./trace-handle.js";
-import type { Transport, TransportErrorHandler } from "./transport.js";
+import type {
+  CreateRunPayload,
+  EndRunPayload,
+  Transport,
+  TransportErrorHandler,
+} from "./transport.js";
+import { SDK_NAME, SDK_VERSION } from "./version.js";
 
 /**
  * Shorthand transport configuration for built-in transports.
@@ -147,6 +156,7 @@ export class AgentGauge implements TraceEmitter {
   private readonly onTransportError: TransportErrorHandler | undefined;
   private shutdownRequested = false;
   private readonly pending = new Set<Promise<void>>();
+  private readonly pendingRunCreates = new Map<string, Promise<void>>();
 
   constructor(config: AgentGaugeConfig = {}) {
     if (config.project !== undefined && config.project.trim().length === 0) {
@@ -187,6 +197,88 @@ export class AgentGauge implements TraceEmitter {
   }
 
   /**
+   * Starts a run/task. Generates a run id when omitted and queues createRun best-effort.
+   * @throws ValidationError for invalid inputs
+   * @throws ConfigurationError if the client has been shut down
+   */
+  startRun(input: StartRunInput): RunHandle {
+    this.assertNotShutdown();
+    const validated = validateStartRunInput(input);
+
+    const runId = validated.runId ?? `run_${crypto.randomUUID()}`;
+    const project = validated.project ?? this.project;
+    const startedAt = new Date().toISOString();
+
+    const payload: CreateRunPayload = {
+      id: runId,
+      name: validated.name,
+      agentId: validated.agentId,
+      startedAt,
+      ...(project !== undefined ? { project } : {}),
+      ...(validated.metadata !== undefined ? { metadata: validated.metadata } : {}),
+    };
+
+    const createTask = this.enqueueCreateRun(payload);
+    this.pendingRunCreates.set(runId, createTask);
+    this.pending.add(createTask);
+    void createTask.finally(() => {
+      this.pending.delete(createTask);
+      if (this.pendingRunCreates.get(runId) === createTask) {
+        this.pendingRunCreates.delete(runId);
+      }
+    });
+
+    return new ManualRunHandle(
+      { id: runId, name: validated.name, agentId: validated.agentId },
+      this,
+    );
+  }
+
+  /**
+   * @internal Best-effort run creation; queued like emit.
+   */
+  createRun(payload: CreateRunPayload): void {
+    const task = this.enqueueCreateRun(payload);
+    this.pending.add(task);
+    void task.finally(() => {
+      this.pending.delete(task);
+    });
+  }
+
+  /**
+   * @internal Awaited run end; waits for pending createRun for this id when present.
+   */
+  async endRun(runId: string, payload: EndRunPayload): Promise<void> {
+    const pendingCreate = this.pendingRunCreates.get(runId);
+    if (pendingCreate !== undefined) {
+      await pendingCreate.catch(() => undefined);
+    }
+
+    if (this.transport.endRun === undefined) {
+      return;
+    }
+
+    const task = this.transport.endRun(runId, payload).catch((error: unknown) => {
+      this.notifyTransportError(error, {
+        eventId: runId,
+        traceId: runId,
+        agentId: "agentgauge-run",
+        startedAt: new Date().toISOString(),
+        endedAt: payload.endedAt ?? new Date().toISOString(),
+        latencyMs: 0,
+        status: payload.status === "success" ? "success" : "error",
+        sdk: { name: SDK_NAME, version: SDK_VERSION },
+      });
+    });
+    this.pending.add(task);
+    try {
+      await task;
+    } finally {
+      this.pending.delete(task);
+    }
+  }
+
+  /**
    * @internal Used by TraceHandle. Delivers an event best-effort.
    */
   emit(event: TraceEvent): void {
@@ -222,7 +314,7 @@ export class AgentGauge implements TraceEmitter {
           endedAt: new Date().toISOString(),
           latencyMs: 0,
           status: "error",
-          sdk: { name: "@agentgauge/node", version: "0.5.0" },
+          sdk: { name: SDK_NAME, version: SDK_VERSION },
         });
       }
     }
@@ -242,6 +334,24 @@ export class AgentGauge implements TraceEmitter {
         // Delivery/shutdown transport failures must not throw to callers by policy.
       }
     }
+  }
+
+  private enqueueCreateRun(payload: CreateRunPayload): Promise<void> {
+    if (this.transport.createRun === undefined) {
+      return Promise.resolve();
+    }
+    return this.transport.createRun(payload).catch((error: unknown) => {
+      this.notifyTransportError(error, {
+        eventId: payload.id,
+        traceId: payload.id,
+        agentId: payload.agentId,
+        startedAt: payload.startedAt,
+        endedAt: payload.startedAt,
+        latencyMs: 0,
+        status: "success",
+        sdk: { name: SDK_NAME, version: SDK_VERSION },
+      });
+    });
   }
 
   private notifyTransportError(error: unknown, event: TraceEvent): void {

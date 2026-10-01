@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { ApiKeyListItem, CreatedApiKey } from "@/lib/api-client";
 import { formatAbsolute, formatRelative } from "@/lib/format";
-import { Card } from "./ui";
+import { Card, dataCellClass, dataHeadClass, dataTableClass } from "./ui";
 
 async function proxyJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -31,10 +31,13 @@ export function ApiKeysManager({ initialKeys }: { initialKeys: ApiKeyListItem[] 
 
   return (
     <div className="space-y-4">
-      <Card>
-        <h2 className="text-sm font-semibold">Create API key</h2>
+      <Card className="flex flex-wrap items-end justify-between gap-4 p-4">
+        <div>
+          <h2 className="text-sm font-semibold">Create API key</h2>
+          <p className="mt-1 text-2xs text-faint">The plaintext key is shown once.</p>
+        </div>
         <form
-          className="mt-3 flex flex-wrap items-end gap-3"
+          className="flex flex-wrap items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             setError(null);
@@ -68,21 +71,21 @@ export function ApiKeysManager({ initialKeys }: { initialKeys: ApiKeyListItem[] 
             });
           }}
         >
-          <label className="text-xs text-ink-600">
+          <label className="text-2xs text-secondary">
             Name
             <input
               name="name"
               required
               maxLength={128}
-              className="mt-1 block w-56 rounded border border-ink-200 px-2 py-1.5 text-sm"
+              className="mt-1 block w-56 rounded-control border border-line bg-surface px-2 py-1.5 text-sm text-fg"
               placeholder="CI ingest"
             />
           </label>
-          <label className="text-xs text-ink-600">
+          <label className="text-2xs text-secondary">
             Environment
             <select
               name="environment"
-              className="mt-1 block rounded border border-ink-200 px-2 py-1.5 text-sm"
+              className="mt-1 block rounded-control border border-line bg-surface px-2 py-1.5 text-sm text-fg"
               defaultValue="live"
             >
               <option value="live">live</option>
@@ -92,7 +95,7 @@ export function ApiKeysManager({ initialKeys }: { initialKeys: ApiKeyListItem[] 
           <button
             type="submit"
             disabled={pending}
-            className="rounded-md bg-ink-900 px-3 py-2 text-sm text-white disabled:opacity-60"
+            className="rounded-control bg-fg px-3 py-2 text-sm font-medium text-surface disabled:opacity-60"
           >
             {pending ? "Creating…" : "Create key"}
           </button>
@@ -142,33 +145,44 @@ const gauge = new AgentGauge({
       </Card>
 
       <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-ink-50 text-xs uppercase text-ink-500">
+        <div className="table-scroll">
+          <table className={dataTableClass}>
+            <thead className={dataHeadClass}>
               <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Prefix</th>
-                <th className="px-4 py-3 font-medium">Env</th>
-                <th className="px-4 py-3 font-medium">Created</th>
-                <th className="px-4 py-3 font-medium">Last used</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
+                {["Name", "Prefix", "Environment", "Created", "Last used", "Status", "Actions"].map(
+                  (label) => (
+                    <th key={label} className={`${dataCellClass} font-medium`}>
+                      {label}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
             <tbody>
               {keys.map((key) => (
-                <tr key={key.id} className="border-t border-ink-100">
-                  <td className="px-4 py-3">{key.name}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{key.prefix}…</td>
-                  <td className="px-4 py-3">{key.environment}</td>
-                  <td className="px-4 py-3" title={formatAbsolute(key.createdAt)}>
+                <tr key={key.id} className="border-t border-line">
+                  <td className={dataCellClass}>{key.name}</td>
+                  <td className={`${dataCellClass} font-mono text-xs`}>{key.prefix}…</td>
+                  <td className={dataCellClass}>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-2xs font-medium ${
+                        key.environment === "test" ? "bg-info-soft text-info" : "bg-ok-soft text-ok"
+                      }`}
+                    >
+                      {key.environment}
+                    </span>
+                  </td>
+                  <td className={dataCellClass} title={formatAbsolute(key.createdAt)}>
                     {formatRelative(key.createdAt)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td
+                    className={dataCellClass}
+                    title={key.lastUsedAt ? formatAbsolute(key.lastUsedAt) : undefined}
+                  >
                     {key.lastUsedAt ? formatRelative(key.lastUsedAt) : "—"}
                   </td>
-                  <td className="px-4 py-3">{key.revokedAt ? "revoked" : "active"}</td>
-                  <td className="px-4 py-3">
+                  <td className={dataCellClass}>{key.revokedAt ? "revoked" : "active"}</td>
+                  <td className={dataCellClass}>
                     {!key.revokedAt ? (
                       <button
                         type="button"

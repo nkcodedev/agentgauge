@@ -6,9 +6,10 @@ import {
   formatDurationMs,
   formatLatency,
   formatNumber,
+  formatRelative,
   formatRunCost,
 } from "@/lib/format";
-import { Card, KpiCard, StatusPill } from "./ui";
+import { Card, dataCellClass, dataHeadClass, dataTableClass, KpiCard, StatusPill } from "./ui";
 import { RunningDuration } from "./running-duration";
 import { RunWaterfall } from "./run-waterfall";
 
@@ -36,7 +37,7 @@ export function RunDetailView({ run }: { run: RunDetail }) {
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-3">
@@ -78,12 +79,13 @@ export function RunDetailView({ run }: { run: RunDetail }) {
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Requests" value={formatNumber(run.requestCount)} />
         <KpiCard label="Tokens" value={formatNumber(run.totalTokens)} />
+        <KpiCard label="Errors" value={formatNumber(run.errorCount)} />
         <KpiCard
-          label="Errors"
-          value={formatNumber(run.errorCount)}
+          label="Retries"
+          value={formatNumber(run.retryCount)}
           hint={
             run.retryCount === 0
               ? undefined
@@ -91,11 +93,6 @@ export function RunDetailView({ run }: { run: RunDetail }) {
                 ? "1 retry"
                 : `${formatNumber(run.retryCount)} retries`
           }
-        />
-        <KpiCard
-          label="Retries"
-          value={formatNumber(run.retryCount)}
-          hint="Failed attempts before success"
         />
       </div>
 
@@ -111,19 +108,25 @@ export function RunDetailView({ run }: { run: RunDetail }) {
         {traces.length === 0 ? (
           <p className="px-4 py-6 text-sm text-ink-600">No traces attached to this run yet.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-ink-50 text-xs uppercase tracking-wide text-ink-500">
+          <div className="table-scroll">
+            <table className={dataTableClass}>
+              <thead className={dataHeadClass}>
                 <tr>
-                  <th className="px-4 py-3 font-medium">Time</th>
-                  <th className="px-4 py-3 font-medium">Operation</th>
-                  <th className="px-4 py-3 font-medium">Provider</th>
-                  <th className="px-4 py-3 font-medium">Model</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Attempt</th>
-                  <th className="px-4 py-3 font-medium">Tokens</th>
-                  <th className="px-4 py-3 font-medium">Cost</th>
-                  <th className="px-4 py-3 font-medium">Latency</th>
+                  {[
+                    "Time",
+                    "Operation",
+                    "Provider",
+                    "Model",
+                    "Status",
+                    "Attempt",
+                    "Tokens",
+                    "Cost",
+                    "Latency",
+                  ].map((label) => (
+                    <th key={label} className={`${dataCellClass} font-medium`}>
+                      {label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -134,14 +137,14 @@ export function RunDetailView({ run }: { run: RunDetail }) {
                   return (
                     <tr
                       key={t.eventId}
-                      className={`border-t border-ink-100 hover:bg-ink-50/80 ${
-                        groupBreak ? "border-t-ink-300" : ""
-                      } ${t.status === "error" ? "bg-red-50/30" : ""}`}
+                      className={`border-t border-line hover:bg-muted/70 ${
+                        groupBreak ? "border-t-line" : ""
+                      } ${t.status === "error" ? "bg-bad-soft/40" : ""}`}
                     >
-                      <td className="px-4 py-3" title={formatAbsolute(t.startedAt)}>
-                        {formatAbsolute(t.startedAt)}
+                      <td className={dataCellClass} title={formatAbsolute(t.startedAt)}>
+                        {formatRelative(t.startedAt)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className={dataCellClass}>
                         <Link
                           href={`/traces?eventId=${encodeURIComponent(t.eventId)}&range=30d`}
                           className="text-accent no-underline"
@@ -154,19 +157,19 @@ export function RunDetailView({ run }: { run: RunDetail }) {
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3">{t.provider ?? "—"}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{t.model ?? "—"}</td>
-                      <td className="px-4 py-3">
+                      <td className={dataCellClass}>{t.provider ?? "—"}</td>
+                      <td className={`${dataCellClass} font-mono text-xs`}>{t.model ?? "—"}</td>
+                      <td className={dataCellClass}>
                         <StatusPill status={t.status} />
                       </td>
-                      <td className="px-4 py-3">{t.attempt ?? "—"}</td>
-                      <td className="px-4 py-3">{formatNumber(t.totalTokens ?? 0)}</td>
-                      <td className="px-4 py-3">
+                      <td className={dataCellClass}>{t.attempt ?? "—"}</td>
+                      <td className={dataCellClass}>{formatNumber(t.totalTokens ?? 0)}</td>
+                      <td className={`${dataCellClass} font-mono text-xs`}>
                         {t.totalCost === null || t.costStatus === "unknown_model"
                           ? "Cost unavailable"
                           : formatCost(t.totalCost, { currency: t.currency })}
                       </td>
-                      <td className="px-4 py-3">{formatLatency(t.latencyMs)}</td>
+                      <td className={dataCellClass}>{formatLatency(t.latencyMs)}</td>
                     </tr>
                   );
                 })}
@@ -177,9 +180,9 @@ export function RunDetailView({ run }: { run: RunDetail }) {
       </Card>
 
       {run.metadata && Object.keys(run.metadata).length > 0 ? (
-        <Card>
-          <h3 className="text-sm font-semibold text-ink-900">Metadata</h3>
-          <pre className="mt-2 max-h-48 overflow-auto rounded bg-ink-50 p-2 font-mono text-xs">
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-fg">Metadata</h3>
+          <pre className="mt-2 max-h-48 overflow-auto rounded-control bg-muted p-2 font-mono text-xs">
             {JSON.stringify(run.metadata, null, 2)}
           </pre>
         </Card>

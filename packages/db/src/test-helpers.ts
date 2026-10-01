@@ -5,7 +5,8 @@ import postgres from "postgres";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb, type Database } from "./client.js";
-import { apiKeys, modelPricing, organizations, projects } from "./schema.js";
+import { ensureModelPricingSeeds } from "./ensure-pricing-seeds.js";
+import { apiKeys, organizations, projects } from "./schema.js";
 
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://agentgauge:agentgauge@localhost:5432/agentgauge";
@@ -70,41 +71,7 @@ export async function createTestTenant(slugPrefix = "test"): Promise<TestTenant>
     environment: "test",
   });
 
-  const pricing = await db.select().from(modelPricing).limit(1);
-  if (pricing.length === 0) {
-    await db.insert(modelPricing).values([
-      {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        inputPricePerMillion: "0.15000000",
-        outputPricePerMillion: "0.60000000",
-        currency: "USD",
-        effectiveFrom: new Date("2024-01-01T00:00:00.000Z"),
-        effectiveTo: null,
-        source: "test-seed",
-      },
-      {
-        provider: "openai",
-        model: "gpt-4o",
-        inputPricePerMillion: "2.50000000",
-        outputPricePerMillion: "10.00000000",
-        currency: "USD",
-        effectiveFrom: new Date("2024-01-01T00:00:00.000Z"),
-        effectiveTo: null,
-        source: "test-seed",
-      },
-      {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        inputPricePerMillion: "0.10000000",
-        outputPricePerMillion: "0.40000000",
-        currency: "USD",
-        effectiveFrom: new Date("2023-01-01T00:00:00.000Z"),
-        effectiveTo: new Date("2024-01-01T00:00:00.000Z"),
-        source: "test-seed-historical",
-      },
-    ]);
-  }
+  await ensureModelPricingSeeds(db);
 
   return {
     db,

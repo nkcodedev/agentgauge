@@ -19,6 +19,19 @@ import { ChartCard } from "./ui";
 
 const SYNC = "usage";
 
+const axisTickStyle = { fontSize: 12, fill: "var(--text-secondary)" };
+
+const tooltipStyle = {
+  contentStyle: {
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    color: "var(--text)",
+  },
+  labelStyle: { color: "var(--text)", fontWeight: 600 },
+  itemStyle: { color: "var(--text-secondary)" },
+};
+
 function axisTick(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -50,14 +63,18 @@ export function UsageCharts({ series }: { series: UsageSeriesPoint[] }) {
               <XAxis
                 dataKey="bucket"
                 tickFormatter={axisTick}
-                tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                tick={axisTickStyle}
+                stroke="var(--text-muted)"
               />
               <YAxis
                 width={40}
                 domain={[0, "auto"]}
-                tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+                tick={axisTickStyle}
+                stroke="var(--text-muted)"
               />
               <Tooltip
+                {...tooltipStyle}
+                labelFormatter={(value) => formatAbsolute(String(value))}
                 formatter={(value: number, name: string) => [
                   formatNumber(Number(value)),
                   name === "priorRequests" ? "Earlier in range" : "Requests",
@@ -112,14 +129,18 @@ function MetricLine({
             <XAxis
               dataKey="bucket"
               tickFormatter={axisTick}
-              tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+              tick={axisTickStyle}
+              stroke="var(--text-muted)"
             />
             <YAxis
               width={48}
               domain={[0, "auto"]}
-              tick={{ fontSize: 11, fill: "var(--text-muted)" }}
+              tick={axisTickStyle}
+              stroke="var(--text-muted)"
             />
             <Tooltip
+              {...tooltipStyle}
+              labelFormatter={(value) => formatAbsolute(String(value))}
               formatter={(value: number, name: string) => [
                 format(Number(value)),
                 name === prior ? "Earlier in range" : title,

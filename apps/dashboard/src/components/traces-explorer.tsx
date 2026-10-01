@@ -185,7 +185,7 @@ export function TracesExplorer({
       </Card>
 
       <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="min-w-full text-left text-sm">
             <thead className="sticky top-0 bg-surface text-2xs text-secondary">
               <tr>

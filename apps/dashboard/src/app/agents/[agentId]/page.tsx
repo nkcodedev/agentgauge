@@ -10,7 +10,15 @@ import {
   rangeFromPreset,
 } from "@/lib/format";
 import { BreakdownBars, TimeSeriesChart } from "@/components/charts";
-import { Card, ErrorBanner, KpiCard, PageHeader, StatusPill } from "@/components/ui";
+import {
+  Card,
+  dataHeadClass,
+  dataTableClass,
+  ErrorBanner,
+  KpiCard,
+  PageHeader,
+  StatusPill,
+} from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +38,7 @@ export default async function AgentDetailPage({
         actions={
           <Link
             href={`/traces?agentId=${encodeURIComponent(decoded)}`}
-            className="rounded-md border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 no-underline"
+            className="rounded-control border border-line bg-surface px-3 py-2 text-sm text-fg no-underline"
           >
             View traces
           </Link>
@@ -95,9 +103,9 @@ async function AgentBody({ agentId }: { agentId: string }) {
               </span>
             ) : null}
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-ink-50 text-xs uppercase text-ink-500">
+          <div className="table-scroll">
+            <table className={dataTableClass}>
+              <thead className={dataHeadClass}>
                 <tr>
                   <th className="px-4 py-2 font-medium">Time</th>
                   <th className="px-4 py-2 font-medium">Model</th>

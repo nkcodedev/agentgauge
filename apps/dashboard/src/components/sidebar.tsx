@@ -32,7 +32,9 @@ export function Sidebar({ environment }: { environment: "live" | "test" }) {
       </div>
       <nav className="flex flex-1 flex-col gap-1 px-2" aria-label="Primary">
         {links.map((link) => {
-          const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+          const active = link.href.startsWith("/settings")
+            ? pathname.startsWith("/settings")
+            : pathname === link.href || pathname.startsWith(`${link.href}/`);
           const Icon = link.icon;
           return (
             <Link

@@ -250,6 +250,7 @@ export async function getAgent(
 
 export interface TraceFilters extends DateRange {
   readonly agentId?: string;
+  readonly runId?: string;
   readonly provider?: string;
   readonly model?: string;
   readonly status?: string;
@@ -261,6 +262,9 @@ export interface TraceListItem {
   readonly eventId: string;
   readonly traceId: string;
   readonly agentId: string;
+  readonly runId: string | null;
+  readonly operationId: string | null;
+  readonly attempt: number | null;
   readonly provider: string | null;
   readonly model: string | null;
   readonly operationName: string | null;
@@ -307,6 +311,7 @@ export async function listTraces(
   if (filters.provider) conditions.push(eq(traces.provider, filters.provider));
   if (filters.model) conditions.push(eq(traces.model, filters.model));
   if (filters.status) conditions.push(eq(traces.status, filters.status));
+  if (filters.runId) conditions.push(eq(traces.runId, filters.runId));
   if (filters.agentId) {
     const agentRows = await db
       .select()
@@ -327,6 +332,9 @@ export async function listTraces(
       eventId: traces.eventId,
       traceId: traces.traceId,
       agentKey: agents.agentKey,
+      runId: traces.runId,
+      operationId: traces.operationId,
+      attempt: traces.attempt,
       provider: traces.provider,
       model: traces.model,
       operationName: traces.operationName,
@@ -356,6 +364,9 @@ export async function listTraces(
       eventId: r.eventId,
       traceId: r.traceId,
       agentId: r.agentKey,
+      runId: r.runId,
+      operationId: r.operationId,
+      attempt: r.attempt,
       provider: r.provider,
       model: r.model,
       operationName: r.operationName,
@@ -384,6 +395,9 @@ export async function getTrace(
       eventId: traces.eventId,
       traceId: traces.traceId,
       agentKey: agents.agentKey,
+      runId: traces.runId,
+      operationId: traces.operationId,
+      attempt: traces.attempt,
       provider: traces.provider,
       model: traces.model,
       operationName: traces.operationName,
@@ -419,6 +433,9 @@ export async function getTrace(
     eventId: r.eventId,
     traceId: r.traceId,
     agentId: r.agentKey,
+    runId: r.runId,
+    operationId: r.operationId,
+    attempt: r.attempt,
     provider: r.provider,
     model: r.model,
     operationName: r.operationName,

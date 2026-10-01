@@ -1,6 +1,6 @@
 # AgentGauge Security
 
-**Status:** Milestone 4.1 (`0.5.0`) — dashboard MVP + API-key management + live SSE
+**Status:** `0.7.0` — multi-provider instrumentation, run observability, live SSE, and installation pricing management
 **Related:** [docs/TELEMETRY.md](./docs/TELEMETRY.md), [docs/API.md](./docs/API.md)
 
 AgentGauge collects **operational telemetry**, not secrets and not conversational content by default.

@@ -83,7 +83,7 @@ async function TracesBody(props: {
           <p>
             Check that the SDK endpoint and API key match this project, then send a sample trace.
           </p>
-          <pre className="overflow-x-auto rounded-md bg-ink-950 p-3 font-mono text-xs text-ink-50">{`trace.end({ inputTokens: 100, outputTokens: 30 });
+          <pre className="overflow-x-auto rounded-control bg-muted p-3 font-mono text-xs text-fg">{`trace.end({ inputTokens: 100, outputTokens: 30 });
 await gauge.flush();`}</pre>
         </EmptyState>
       );

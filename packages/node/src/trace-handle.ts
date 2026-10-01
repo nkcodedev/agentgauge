@@ -9,6 +9,7 @@ import {
   type FailTraceInput,
   type TraceEvent,
 } from "@agentgauge/core";
+import type { CreateRunPayload, EndRunPayload } from "./transport.js";
 import { SDK_NAME, SDK_VERSION } from "./version.js";
 
 /**
@@ -40,6 +41,9 @@ interface TraceContext {
   readonly provider?: string;
   readonly model?: string;
   readonly operationName?: string;
+  readonly runId?: string;
+  readonly operationId?: string;
+  readonly attempt?: number;
   readonly metadata?: AgentGaugeMetadata;
   readonly tags?: readonly string[];
   readonly startedAt: string;
@@ -49,6 +53,10 @@ interface TraceContext {
 export interface TraceEmitter {
   emit(event: TraceEvent): void;
   assertNotShutdown(): void;
+  /** Best-effort create; queued like emit. */
+  createRun(payload: CreateRunPayload): void;
+  /** Awaited end. */
+  endRun(runId: string, payload: EndRunPayload): Promise<void>;
 }
 
 function mergeMetadata(
@@ -84,13 +92,20 @@ function computeLatencyMs(startHrTime: bigint): number {
 }
 
 function withOptionalString(
-  key: "project" | "environment" | "provider" | "model" | "operationName",
+  key: "project" | "environment" | "provider" | "model" | "operationName" | "runId" | "operationId",
   value: string | undefined,
 ): Partial<BuildTraceEventInput> {
   if (value === undefined) {
     return {};
   }
   return { [key]: value };
+}
+
+function withOptionalAttempt(value: number | undefined): Partial<BuildTraceEventInput> {
+  if (value === undefined) {
+    return {};
+  }
+  return { attempt: value };
 }
 
 export class ManualTraceHandle implements TraceHandle {
@@ -154,6 +169,9 @@ export class ManualTraceHandle implements TraceHandle {
       ...withOptionalString("provider", validated.provider ?? this.ctx.provider),
       ...withOptionalString("model", validated.model ?? this.ctx.model),
       ...withOptionalString("operationName", validated.operationName ?? this.ctx.operationName),
+      ...withOptionalString("runId", this.ctx.runId),
+      ...withOptionalString("operationId", this.ctx.operationId),
+      ...withOptionalAttempt(this.ctx.attempt),
       ...(validated.usage !== undefined ? { usage: validated.usage } : {}),
       ...(status === "error" && validated.error !== undefined ? { error: validated.error } : {}),
       ...(metadata !== undefined ? { metadata } : {}),
@@ -171,6 +189,9 @@ export function createTraceContext(input: {
   provider?: string;
   model?: string;
   operationName?: string;
+  runId?: string;
+  operationId?: string;
+  attempt?: number;
   metadata?: AgentGaugeMetadata;
   tags?: readonly string[];
   traceId?: string;
@@ -190,6 +211,9 @@ export function createTraceContext(input: {
     ...withOptionalString("provider", input.provider),
     ...withOptionalString("model", input.model),
     ...withOptionalString("operationName", input.operationName),
+    ...withOptionalString("runId", input.runId),
+    ...withOptionalString("operationId", input.operationId),
+    ...withOptionalAttempt(input.attempt),
     ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
     ...(input.tags !== undefined ? { tags: input.tags } : {}),
   };

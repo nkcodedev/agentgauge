@@ -4,15 +4,26 @@ import { ConfigurationError, ValidationError } from "@agentgauge/core";
 import { AgentGauge } from "./agent-gauge.js";
 import { ConsoleTransport } from "./console-transport.js";
 import { HttpTransport } from "./http-transport.js";
+import type { CreateRunPayload, EndRunPayload } from "./transport.js";
 import { SDK_NAME, SDK_VERSION } from "./version.js";
 
 function collectTransport() {
   const events: TraceEvent[] = [];
+  const runs: CreateRunPayload[] = [];
+  const runEnds: Array<{ runId: string; payload: EndRunPayload }> = [];
   return {
     events,
+    runs,
+    runEnds,
     transport: {
       async send(event: TraceEvent) {
         events.push(event);
+      },
+      async createRun(payload: CreateRunPayload) {
+        runs.push(payload);
+      },
+      async endRun(runId: string, payload: EndRunPayload) {
+        runEnds.push({ runId, payload });
       },
     },
   };
@@ -298,5 +309,133 @@ describe("shorthand console transport", () => {
     gauge.startTrace({ agentId: "a" }).end();
     await gauge.flush();
     expect(log).toHaveBeenCalled();
+  });
+});
+
+describe("AgentGauge runs", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("startRun generates unique run ids", async () => {
+    const { runs, transport } = collectTransport();
+    const gauge = new AgentGauge({ transport });
+    const a = gauge.startRun({ name: "task-a", agentId: "agent-1" });
+    const b = gauge.startRun({ name: "task-b", agentId: "agent-1" });
+    expect(a.id).toMatch(/^run_[0-9a-f-]{36}$/i);
+    expect(b.id).toMatch(/^run_[0-9a-f-]{36}$/i);
+    expect(a.id).not.toBe(b.id);
+    await a.end({ status: "success" });
+    await b.end({ status: "success" });
+    await gauge.flush();
+    expect(runs.map((r) => r.id).sort()).toEqual([a.id, b.id].sort());
+  });
+
+  it("endRun records success and error terminal statuses", async () => {
+    const { runEnds, transport } = collectTransport();
+    const gauge = new AgentGauge({ transport });
+    const ok = gauge.startRun({ name: "ok", agentId: "a" });
+    await ok.end({ status: "success", metadata: { outcome: "done" } });
+    const bad = gauge.startRun({ name: "bad", agentId: "a" });
+    await bad.end({ status: "error" });
+    await gauge.flush();
+    expect(runEnds).toHaveLength(2);
+    expect(runEnds[0]!.payload.status).toBe("success");
+    expect(runEnds[0]!.payload.metadata).toEqual({ outcome: "done" });
+    expect(runEnds[1]!.payload.status).toBe("error");
+  });
+
+  it("rejects invalid endRun status", async () => {
+    const gauge = new AgentGauge({ transport: collectTransport().transport });
+    const run = gauge.startRun({ name: "x", agentId: "a" });
+    await expect(run.end({ status: "running" as "success" })).rejects.toThrow(ValidationError);
+  });
+
+  it("throws on duplicate run end()", async () => {
+    const gauge = new AgentGauge({ transport: collectTransport().transport });
+    const run = gauge.startRun({ name: "x", agentId: "a" });
+    await run.end({ status: "success" });
+    await expect(run.end({ status: "success" })).rejects.toThrow(ConfigurationError);
+  });
+
+  it("rejects forbidden metadata on start and end run", async () => {
+    const { runs, runEnds, transport } = collectTransport();
+    const gauge = new AgentGauge({ transport });
+    expect(() =>
+      gauge.startRun({ name: "x", agentId: "a", metadata: { prompt: "secret" } }),
+    ).toThrow(ValidationError);
+    const run = gauge.startRun({ name: "x", agentId: "a", metadata: { region: "us" } });
+    await expect(run.end({ status: "success", metadata: { apiKey: "leak" } })).rejects.toThrow(
+      ValidationError,
+    );
+    await run.end({ status: "success", metadata: { ok: true } });
+    await gauge.flush();
+    expect(runs[0]!.metadata).toEqual({ region: "us" });
+    expect(runEnds[0]!.payload.metadata).toEqual({ ok: true });
+  });
+
+  it("includes runId, operationId, and attempt on completed traces", async () => {
+    const { events, transport } = collectTransport();
+    const gauge = new AgentGauge({ transport });
+    gauge
+      .startTrace({
+        agentId: "a",
+        runId: "run_abc",
+        operationId: "op_1",
+        attempt: 2,
+      })
+      .end();
+    await gauge.flush();
+    expect(events[0]!.runId).toBe("run_abc");
+    expect(events[0]!.operationId).toBe("op_1");
+    expect(events[0]!.attempt).toBe(2);
+  });
+
+  it("traces without run fields remain unchanged", async () => {
+    const { events, transport } = collectTransport();
+    const gauge = new AgentGauge({ transport });
+    gauge.startTrace({ agentId: "a" }).end();
+    await gauge.flush();
+    expect(events[0]!.runId).toBeUndefined();
+    expect(events[0]!.operationId).toBeUndefined();
+    expect(events[0]!.attempt).toBeUndefined();
+  });
+
+  it("rejects startRun after shutdown", async () => {
+    const gauge = new AgentGauge({ transport: collectTransport().transport });
+    await gauge.shutdown();
+    expect(() => gauge.startRun({ name: "x", agentId: "a" })).toThrow(ConfigurationError);
+  });
+});
+
+describe("HttpTransport runs", () => {
+  it("posts createRun and endRun against derived API base", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const fetchImpl: typeof fetch = async (url, init) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return new Response("{}", { status: 200 });
+    };
+
+    const transport = new HttpTransport({
+      endpoint: "https://example.test/v1/traces/batch",
+      apiKey: "ag_test_example",
+      fetchImpl,
+    });
+
+    await transport.createRun({
+      id: "run_1",
+      name: "job",
+      agentId: "a",
+      startedAt: "2026-10-01T10:00:00.000Z",
+    });
+    await transport.endRun("run_1", { status: "success", endedAt: "2026-10-01T10:01:00.000Z" });
+
+    expect(calls[0]!.url).toBe("https://example.test/v1/runs");
+    expect(JSON.parse(String(calls[0]!.init.body))).toMatchObject({ id: "run_1", name: "job" });
+    expect(calls[1]!.url).toBe("https://example.test/v1/runs/run_1/end");
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({
+      status: "success",
+      endedAt: "2026-10-01T10:01:00.000Z",
+    });
   });
 });

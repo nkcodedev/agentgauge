@@ -13,7 +13,9 @@ test.describe("dashboard live updates", () => {
 
     await page.goto("/overview");
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-    await expect(page.getByTestId("live-indicator")).toBeVisible();
+    await expect(page.getByTestId("live-indicator")).toHaveAttribute("data-status", "live", {
+      timeout: 15_000,
+    });
 
     const requestsLabel = page.getByText("Requests", { exact: true }).first();
     await expect(requestsLabel).toBeVisible();
@@ -66,7 +68,9 @@ test.describe("dashboard live updates", () => {
 
     await page.getByRole("link", { name: "Agents" }).first().click();
     await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
-    await expect(page.getByText("playwright-live-agent")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: "playwright-live-agent" })).toBeVisible({
+      timeout: 15_000,
+    });
 
     await page.getByRole("link", { name: "Traces" }).first().click();
     await expect(page.getByRole("heading", { name: "Traces" })).toBeVisible();

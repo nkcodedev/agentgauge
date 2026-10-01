@@ -129,6 +129,99 @@ describe("database integration", () => {
     expect(Number(row.totalCost)).toBeCloseTo(0.15, 8);
   });
 
+  it("backfills unknown_model Anthropic/Google traces after pricing seeds exist", async () => {
+    const tenant = await createTestTenant("dbbackfill");
+    const agent = (
+      await tenant.db
+        .insert(agents)
+        .values({ projectId: tenant.projectId, agentKey: "backfill-agent" })
+        .returning()
+    )[0]!;
+
+    const anthropicId = crypto.randomUUID();
+    const googleId = crypto.randomUUID();
+    const stillUnknownId = crypto.randomUUID();
+
+    await tenant.db.insert(traces).values([
+      {
+        eventId: anthropicId,
+        traceId: anthropicId,
+        projectId: tenant.projectId,
+        agentId: agent.id,
+        provider: "anthropic",
+        model: "claude-sonnet-5-5",
+        startedAt: new Date("2026-07-01T00:00:00.000Z"),
+        endedAt: new Date("2026-07-01T00:00:01.000Z"),
+        latencyMs: 1000,
+        status: "success",
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        totalTokens: 1_000_000,
+        sdkName: "@agentgauge/node",
+        sdkVersion: "0.5.0",
+        costStatus: "unknown_model",
+        totalCost: null,
+      },
+      {
+        eventId: googleId,
+        traceId: googleId,
+        projectId: tenant.projectId,
+        agentId: agent.id,
+        provider: "google",
+        model: "gemini-2.5-flash",
+        startedAt: new Date("2026-07-01T00:00:00.000Z"),
+        endedAt: new Date("2026-07-01T00:00:01.000Z"),
+        latencyMs: 1000,
+        status: "success",
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        totalTokens: 1_000_000,
+        sdkName: "@agentgauge/node",
+        sdkVersion: "0.5.0",
+        costStatus: "unknown_model",
+        totalCost: null,
+      },
+      {
+        eventId: stillUnknownId,
+        traceId: stillUnknownId,
+        projectId: tenant.projectId,
+        agentId: agent.id,
+        provider: "anthropic",
+        model: "claude-not-a-real-model",
+        startedAt: new Date("2026-07-01T00:00:00.000Z"),
+        endedAt: new Date("2026-07-01T00:00:01.000Z"),
+        latencyMs: 1000,
+        status: "success",
+        inputTokens: 100,
+        outputTokens: 10,
+        totalTokens: 110,
+        sdkName: "@agentgauge/node",
+        sdkVersion: "0.5.0",
+        costStatus: "unknown_model",
+        totalCost: null,
+      },
+    ]);
+
+    const updated = await enrichPendingTraces(tenant.db, 200);
+    expect(updated).toBeGreaterThanOrEqual(2);
+
+    const anthropic = (
+      await tenant.db.select().from(traces).where(eq(traces.eventId, anthropicId))
+    )[0]!;
+    expect(anthropic.costStatus).toBe("priced");
+    expect(Number(anthropic.totalCost)).toBeCloseTo(2.0, 8);
+
+    const google = (await tenant.db.select().from(traces).where(eq(traces.eventId, googleId)))[0]!;
+    expect(google.costStatus).toBe("priced");
+    expect(Number(google.totalCost)).toBeCloseTo(0.3, 8);
+
+    const unknown = (
+      await tenant.db.select().from(traces).where(eq(traces.eventId, stillUnknownId))
+    )[0]!;
+    expect(unknown.costStatus).toBe("unknown_model");
+    expect(unknown.totalCost).toBeNull();
+  });
+
   it("stores api key hash not plaintext", async () => {
     const tenant = await createTestTenant("dbkeys");
     const keys = await tenant.db

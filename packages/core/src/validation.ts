@@ -1,20 +1,47 @@
 import { ValidationError } from "./errors.js";
 import type {
   AgentGaugeMetadata,
+  EndRunInput,
   EndTraceInput,
   FailTraceInput,
+  StartRunInput,
   StartTraceInput,
   TokenUsage,
   TraceError,
 } from "./types.js";
+import { USAGE_DETAILS_KEYS, type UsageDetails } from "./providers.js";
 
-const FORBIDDEN_CONTENT_KEYS = new Set([
+/**
+ * Top-level metadata keys that typically carry prompt/completion content or secrets.
+ * Operational keys (region, usageDetails, etc.) remain allowed.
+ */
+export const FORBIDDEN_METADATA_CONTENT_KEYS = Object.freeze([
   "prompt",
+  "prompts",
   "completion",
+  "completions",
+  "message",
   "messages",
+  "content",
+  "contents",
+  "input",
+  "output",
+  "system",
+  "systemPrompt",
+  "toolArguments",
+  "toolOutput",
+  "request",
+  "response",
+  "rawRequest",
+  "rawResponse",
   "responseBody",
   "response_body",
-]);
+  "apiKey",
+  "authorization",
+] as const);
+
+const FORBIDDEN_CONTENT_KEYS = new Set<string>(FORBIDDEN_METADATA_CONTENT_KEYS);
+const USAGE_DETAILS_KEY_SET = new Set<string>(USAGE_DETAILS_KEYS);
 
 function assertNonEmptyString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -70,8 +97,61 @@ function isFailTraceInputObject(value: unknown): value is FailTraceInput {
 }
 
 /**
+ * Validates optional metadata.usageDetails (numeric operational extras only).
+ */
+function normalizeUsageDetails(value: unknown): UsageDetails | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("metadata.usageDetails must be a plain object");
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (!USAGE_DETAILS_KEY_SET.has(key)) {
+      throw new ValidationError(
+        `metadata.usageDetails key "${key}" is not supported; allowed: ${USAGE_DETAILS_KEYS.join(", ")}`,
+      );
+    }
+  }
+
+  const cachedInputTokens = assertOptionalNonNegativeInteger(
+    record.cachedInputTokens,
+    "metadata.usageDetails.cachedInputTokens",
+  );
+  const cacheWriteTokens = assertOptionalNonNegativeInteger(
+    record.cacheWriteTokens,
+    "metadata.usageDetails.cacheWriteTokens",
+  );
+  const reasoningTokens = assertOptionalNonNegativeInteger(
+    record.reasoningTokens,
+    "metadata.usageDetails.reasoningTokens",
+  );
+
+  if (
+    cachedInputTokens === undefined &&
+    cacheWriteTokens === undefined &&
+    reasoningTokens === undefined
+  ) {
+    return undefined;
+  }
+
+  const details: {
+    cachedInputTokens?: number;
+    cacheWriteTokens?: number;
+    reasoningTokens?: number;
+  } = {};
+  if (cachedInputTokens !== undefined) details.cachedInputTokens = cachedInputTokens;
+  if (cacheWriteTokens !== undefined) details.cacheWriteTokens = cacheWriteTokens;
+  if (reasoningTokens !== undefined) details.reasoningTokens = reasoningTokens;
+  return Object.freeze(details);
+}
+
+/**
  * Validates and shallow-freezes user metadata.
  * Rejects known content-capture keys that are unsupported in V1.
+ * Normalizes optional `usageDetails` when present.
  */
 export function normalizeMetadata(
   metadata: AgentGaugeMetadata | undefined,
@@ -91,7 +171,19 @@ export function normalizeMetadata(
     }
   }
 
-  return Object.freeze({ ...metadata });
+  const usageDetails = normalizeUsageDetails(metadata.usageDetails);
+  const copy: Record<string, unknown> = { ...metadata };
+  if (usageDetails === undefined) {
+    delete copy.usageDetails;
+  } else {
+    copy.usageDetails = usageDetails;
+  }
+
+  if (Object.keys(copy).length === 0) {
+    return undefined;
+  }
+
+  return Object.freeze(copy);
 }
 
 /**
@@ -120,6 +212,12 @@ export function normalizeTags(tags: readonly string[] | undefined): readonly str
 
 /**
  * Normalizes token usage and derives totalTokens when both parts exist and total is omitted.
+ *
+ * Rules:
+ * 1. Keep provider-reported totalTokens when valid.
+ * 2. Else if both inputTokens and outputTokens are known, totalTokens = sum.
+ * 3. Missing fields stay undefined (never coerced to 0).
+ * 4. Reject negative / non-finite / non-integer values.
  */
 export function normalizeTokenUsage(input: {
   readonly inputTokens?: number;
@@ -157,6 +255,9 @@ export function normalizeTokenUsage(input: {
   return Object.freeze(usage);
 }
 
+/** Alias for {@link normalizeTokenUsage} — preferred name in multi-provider docs. */
+export const normalizeUsage = normalizeTokenUsage;
+
 /**
  * Validates start-trace developer inputs (does not generate IDs or timestamps).
  */
@@ -167,6 +268,9 @@ export function validateStartTraceInput(input: StartTraceInput): {
   provider?: string;
   model?: string;
   operationName?: string;
+  runId?: string;
+  operationId?: string;
+  attempt?: number;
   metadata?: AgentGaugeMetadata;
   tags?: readonly string[];
   traceId?: string;
@@ -181,9 +285,24 @@ export function validateStartTraceInput(input: StartTraceInput): {
   const provider = assertOptionalNonEmptyString(input.provider, "provider");
   const model = assertOptionalNonEmptyString(input.model, "model");
   const operationName = assertOptionalNonEmptyString(input.operationName, "operationName");
+  const runId = assertOptionalNonEmptyString(input.runId, "runId");
+  const operationId = assertOptionalNonEmptyString(input.operationId, "operationId");
   const traceId = assertOptionalNonEmptyString(input.traceId, "traceId");
   const metadata = normalizeMetadata(input.metadata);
   const tags = normalizeTags(input.tags);
+
+  let attempt: number | undefined;
+  if (input.attempt !== undefined) {
+    if (
+      typeof input.attempt !== "number" ||
+      !Number.isInteger(input.attempt) ||
+      input.attempt < 1 ||
+      input.attempt > 1_000_000
+    ) {
+      throw new ValidationError("attempt must be an integer >= 1");
+    }
+    attempt = input.attempt;
+  }
 
   const result: {
     agentId: string;
@@ -192,6 +311,9 @@ export function validateStartTraceInput(input: StartTraceInput): {
     provider?: string;
     model?: string;
     operationName?: string;
+    runId?: string;
+    operationId?: string;
+    attempt?: number;
     metadata?: AgentGaugeMetadata;
     tags?: readonly string[];
     traceId?: string;
@@ -202,10 +324,78 @@ export function validateStartTraceInput(input: StartTraceInput): {
   if (provider !== undefined) result.provider = provider;
   if (model !== undefined) result.model = model;
   if (operationName !== undefined) result.operationName = operationName;
+  if (runId !== undefined) result.runId = runId;
+  if (operationId !== undefined) result.operationId = operationId;
+  if (attempt !== undefined) result.attempt = attempt;
   if (traceId !== undefined) result.traceId = traceId;
   if (metadata !== undefined) result.metadata = metadata;
   if (tags !== undefined) result.tags = tags;
 
+  return result;
+}
+
+const TERMINAL_STATUSES = new Set(["success", "error", "cancelled", "timeout"]);
+
+/**
+ * Validates start-run developer inputs.
+ */
+export function validateStartRunInput(input: StartRunInput): {
+  name: string;
+  agentId: string;
+  project?: string;
+  metadata?: AgentGaugeMetadata;
+  runId?: string;
+} {
+  if (input === null || typeof input !== "object") {
+    throw new ValidationError("startRun input must be an object");
+  }
+  const name = assertNonEmptyString(input.name, "name");
+  if (name.length > 256) {
+    throw new ValidationError("name must be at most 256 characters");
+  }
+  const agentId = assertNonEmptyString(input.agentId, "agentId");
+  const project = assertOptionalNonEmptyString(input.project, "project");
+  const runId = assertOptionalNonEmptyString(input.runId, "runId");
+  const metadata = normalizeMetadata(input.metadata);
+
+  const result: {
+    name: string;
+    agentId: string;
+    project?: string;
+    metadata?: AgentGaugeMetadata;
+    runId?: string;
+  } = { name, agentId };
+  if (project !== undefined) result.project = project;
+  if (runId !== undefined) result.runId = runId;
+  if (metadata !== undefined) result.metadata = metadata;
+  return result;
+}
+
+/**
+ * Validates end-run developer inputs.
+ */
+export function validateEndRunInput(input: EndRunInput): {
+  status: "success" | "error" | "cancelled" | "timeout";
+  metadata?: AgentGaugeMetadata;
+  endedAt?: string;
+} {
+  if (input === null || typeof input !== "object") {
+    throw new ValidationError("endRun input must be an object");
+  }
+  if (typeof input.status !== "string" || !TERMINAL_STATUSES.has(input.status)) {
+    throw new ValidationError(
+      'status must be one of "success", "error", "cancelled", or "timeout"',
+    );
+  }
+  const metadata = normalizeMetadata(input.metadata);
+  const endedAt = assertOptionalNonEmptyString(input.endedAt, "endedAt");
+  const result: {
+    status: "success" | "error" | "cancelled" | "timeout";
+    metadata?: AgentGaugeMetadata;
+    endedAt?: string;
+  } = { status: input.status as "success" | "error" | "cancelled" | "timeout" };
+  if (metadata !== undefined) result.metadata = metadata;
+  if (endedAt !== undefined) result.endedAt = endedAt;
   return result;
 }
 
@@ -255,6 +445,7 @@ export function validateEndTraceInput(input: EndTraceInput | undefined): {
 
 /**
  * Converts unknown thrown values into a sanitized TraceError.
+ * Never copies stacks, request/response bodies, or provider payloads.
  */
 export function normalizeTraceError(error: unknown): TraceError {
   if (error === undefined || error === null) {

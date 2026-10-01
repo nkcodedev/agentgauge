@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
  * Architecture-boundary check.
- * - @agentgauge/core must not import node / openai / apps / db / fastify
- * - @agentgauge/node must not import openai / apps / db / fastify
- * - @agentgauge/openai must not import apps / db / fastify
+ * - @agentgauge/core must not import node / openai / anthropic / gemini / apps / db / fastify
+ * - @agentgauge/node must not import openai / anthropic / gemini / apps / db / fastify
+ * - provider packages must not import apps / db / fastify
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -27,8 +27,15 @@ const checks = [
     forbidden: [
       { re: /from\s+["']@agentgauge\/node["']/, message: "must not import @agentgauge/node" },
       { re: /from\s+["']@agentgauge\/openai["']/, message: "must not import @agentgauge/openai" },
+      {
+        re: /from\s+["']@agentgauge\/anthropic["']/,
+        message: "must not import @agentgauge/anthropic",
+      },
+      { re: /from\s+["']@agentgauge\/gemini["']/, message: "must not import @agentgauge/gemini" },
       { re: /from\s+["']node:/, message: "must not import node: built-ins" },
       { re: /from\s+["']openai["']/, message: "must not import openai" },
+      { re: /from\s+["']@anthropic-ai\/sdk["']/, message: "must not import @anthropic-ai/sdk" },
+      { re: /from\s+["']@google\/genai["']/, message: "must not import @google/genai" },
       ...backendForbidden,
     ],
   },
@@ -39,12 +46,27 @@ const checks = [
         re: /from\s+["']@agentgauge\/openai["']/,
         message: "must not import @agentgauge/openai",
       },
+      {
+        re: /from\s+["']@agentgauge\/anthropic["']/,
+        message: "must not import @agentgauge/anthropic",
+      },
+      { re: /from\s+["']@agentgauge\/gemini["']/, message: "must not import @agentgauge/gemini" },
       { re: /from\s+["']openai["']/, message: "must not import openai" },
+      { re: /from\s+["']@anthropic-ai\/sdk["']/, message: "must not import @anthropic-ai/sdk" },
+      { re: /from\s+["']@google\/genai["']/, message: "must not import @google/genai" },
       ...backendForbidden,
     ],
   },
   {
     dir: path.join(root, "packages/openai/src"),
+    forbidden: [...backendForbidden],
+  },
+  {
+    dir: path.join(root, "packages/anthropic/src"),
+    forbidden: [...backendForbidden],
+  },
+  {
+    dir: path.join(root, "packages/gemini/src"),
     forbidden: [...backendForbidden],
   },
   {
@@ -94,4 +116,6 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log("Architecture boundary check passed (core + node + openai + dashboard).");
+console.log(
+  "Architecture boundary check passed (core + node + openai + anthropic + gemini + dashboard).",
+);

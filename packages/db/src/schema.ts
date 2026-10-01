@@ -93,6 +93,35 @@ export const modelPricing = pgTable(
   (t) => [index("model_pricing_lookup_idx").on(t.provider, t.model, t.effectiveFrom)],
 );
 
+/**
+ * Logical agent execution / user task containing zero or more traces.
+ * Final status is application-declared — not inferred from child traces.
+ */
+export const runs = pgTable(
+  "runs",
+  {
+    id: text("id").primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    status: text("status").notNull().default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("runs_project_started_idx").on(t.projectId, t.startedAt),
+    index("runs_project_agent_idx").on(t.projectId, t.agentId),
+    index("runs_project_status_idx").on(t.projectId, t.status),
+  ],
+);
+
 export const traces = pgTable(
   "traces",
   {
@@ -105,6 +134,9 @@ export const traces = pgTable(
     agentId: uuid("agent_id")
       .notNull()
       .references(() => agents.id, { onDelete: "cascade" }),
+    runId: text("run_id").references(() => runs.id, { onDelete: "set null" }),
+    operationId: text("operation_id"),
+    attempt: integer("attempt"),
     environment: text("environment"),
     provider: text("provider"),
     model: text("model"),
@@ -135,6 +167,9 @@ export const traces = pgTable(
     index("traces_project_started_idx").on(t.projectId, t.startedAt),
     index("traces_project_agent_idx").on(t.projectId, t.agentId),
     index("traces_cost_status_idx").on(t.costStatus),
+    index("traces_run_id_idx").on(t.runId),
+    index("traces_run_started_idx").on(t.runId, t.startedAt),
+    index("traces_run_operation_idx").on(t.runId, t.operationId),
   ],
 );
 
@@ -142,5 +177,6 @@ export type Organization = typeof organizations.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type Agent = typeof agents.$inferSelect;
+export type Run = typeof runs.$inferSelect;
 export type Trace = typeof traces.$inferSelect;
 export type ModelPricing = typeof modelPricing.$inferSelect;

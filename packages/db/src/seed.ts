@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { createDb } from "./client.js";
-import { modelPricing, organizations, projects, apiKeys } from "./schema.js";
+import { organizations, projects, apiKeys } from "./schema.js";
+import { ensureModelPricingSeeds } from "./ensure-pricing-seeds.js";
 import { createHash, randomBytes } from "node:crypto";
 
 function hashApiKey(
@@ -27,45 +28,10 @@ const connectionString =
 async function main(): Promise<void> {
   const db = createDb(connectionString);
 
-  const existingPricing = await db.select().from(modelPricing).limit(1);
-  if (existingPricing.length === 0) {
-    await db.insert(modelPricing).values([
-      {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        inputPricePerMillion: "0.15000000",
-        outputPricePerMillion: "0.60000000",
-        currency: "USD",
-        effectiveFrom: new Date("2024-01-01T00:00:00.000Z"),
-        effectiveTo: null,
-        source: "seed",
-      },
-      {
-        provider: "openai",
-        model: "gpt-4o",
-        inputPricePerMillion: "2.50000000",
-        outputPricePerMillion: "10.00000000",
-        currency: "USD",
-        effectiveFrom: new Date("2024-01-01T00:00:00.000Z"),
-        effectiveTo: null,
-        source: "seed",
-      },
-      // Historical row for pricing-history tests
-      {
-        provider: "openai",
-        model: "gpt-4o-mini",
-        inputPricePerMillion: "0.10000000",
-        outputPricePerMillion: "0.40000000",
-        currency: "USD",
-        effectiveFrom: new Date("2023-01-01T00:00:00.000Z"),
-        effectiveTo: new Date("2024-01-01T00:00:00.000Z"),
-        source: "seed-historical",
-      },
-    ]);
-    console.log("Seeded model_pricing rows.");
-  } else {
-    console.log("model_pricing already seeded; skipping.");
-  }
+  const pricing = await ensureModelPricingSeeds(db);
+  console.log(
+    `model_pricing seeds: inserted=${pricing.inserted}, skipped=${pricing.skipped} (idempotent).`,
+  );
 
   const orgName = "Local Development";
   const projectSlug = "demo-project";

@@ -1,3 +1,8 @@
+import {
+  FORBIDDEN_METADATA_CONTENT_KEYS,
+  normalizeMetadata,
+  ValidationError,
+} from "@agentgauge/core";
 import { z } from "zod";
 
 const MAX_METADATA_KEYS = 32;
@@ -5,6 +10,7 @@ const MAX_METADATA_DEPTH = 3;
 const MAX_STRING = 512;
 const MAX_TAGS = 20;
 const MAX_TAG_LENGTH = 64;
+const FORBIDDEN_METADATA_KEYS = new Set<string>(FORBIDDEN_METADATA_CONTENT_KEYS);
 
 function assertDepth(value: unknown, depth: number): void {
   if (depth > MAX_METADATA_DEPTH) {
@@ -21,6 +27,54 @@ function assertDepth(value: unknown, depth: number): void {
   }
 }
 
+export function metadataSuperRefine(
+  metadata: Record<string, unknown> | undefined,
+  ctx: z.RefinementCtx,
+): void {
+  if (!metadata) return;
+  if (Object.keys(metadata).length > MAX_METADATA_KEYS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `metadata may have at most ${MAX_METADATA_KEYS} keys`,
+    });
+  }
+  try {
+    assertDepth(metadata, 0);
+  } catch {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `metadata nesting exceeds ${MAX_METADATA_DEPTH} levels`,
+    });
+  }
+  const serialized = JSON.stringify(metadata);
+  if (serialized.length > 8_192) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "metadata payload too large",
+    });
+  }
+  for (const [k, v] of Object.entries(metadata)) {
+    if (FORBIDDEN_METADATA_KEYS.has(k)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `metadata key "${k}" is not supported`,
+      });
+    }
+    if (k.length > MAX_STRING) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata key too long" });
+    }
+    if (typeof v === "string" && v.length > MAX_STRING) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata string value too long" });
+    }
+  }
+  try {
+    normalizeMetadata(metadata);
+  } catch (error) {
+    const message = error instanceof ValidationError ? error.message : "metadata failed validation";
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  }
+}
+
 export const TraceEventSchema = z
   .object({
     eventId: z.string().min(1).max(128),
@@ -31,6 +85,9 @@ export const TraceEventSchema = z
     provider: z.string().min(1).max(64).optional(),
     model: z.string().min(1).max(128).optional(),
     operationName: z.string().min(1).max(128).optional(),
+    runId: z.string().min(1).max(128).optional(),
+    operationId: z.string().min(1).max(128).optional(),
+    attempt: z.number().int().min(1).max(1_000_000).optional(),
     startedAt: z.string().datetime({ offset: true }),
     endedAt: z.string().datetime({ offset: true }),
     latencyMs: z.number().int().min(0).max(86_400_000),
@@ -56,39 +113,7 @@ export const TraceEventSchema = z
       version: z.string().min(1).max(64),
     }),
   })
-  .superRefine((event, ctx) => {
-    if (event.metadata) {
-      if (Object.keys(event.metadata).length > MAX_METADATA_KEYS) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `metadata may have at most ${MAX_METADATA_KEYS} keys`,
-        });
-      }
-      try {
-        assertDepth(event.metadata, 0);
-      } catch {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `metadata nesting exceeds ${MAX_METADATA_DEPTH} levels`,
-        });
-      }
-      const serialized = JSON.stringify(event.metadata);
-      if (serialized.length > 8_192) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "metadata payload too large",
-        });
-      }
-      for (const [k, v] of Object.entries(event.metadata)) {
-        if (k.length > MAX_STRING) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata key too long" });
-        }
-        if (typeof v === "string" && v.length > MAX_STRING) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "metadata string value too long" });
-        }
-      }
-    }
-  });
+  .superRefine((event, ctx) => metadataSuperRefine(event.metadata, ctx));
 
 export const IngestBodySchema = z.object({
   events: z.array(TraceEventSchema).min(1).max(100),

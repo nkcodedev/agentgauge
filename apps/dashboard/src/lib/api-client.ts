@@ -241,6 +241,24 @@ export function fetchTrace(eventId: string): Promise<TraceDetail> {
   return apiFetch(`/v1/traces/${encodeURIComponent(eventId)}`);
 }
 
+export interface ModelPricingRow {
+  id: string;
+  provider: string;
+  model: string;
+  inputPricePerMillion: string;
+  outputPricePerMillion: string;
+  currency: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  source: string;
+  kind: "agentgauge_default" | "custom" | "override";
+  status: "active" | "historical" | "upcoming";
+}
+
+export function fetchModelPricing(): Promise<{ data: ModelPricingRow[] }> {
+  return apiFetch("/v1/model-pricing");
+}
+
 export function fetchApiKeys(): Promise<{ data: ApiKeyListItem[] }> {
   return apiFetch("/v1/api-keys");
 }

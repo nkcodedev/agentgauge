@@ -3,14 +3,24 @@ export { BatchedTransport, type BatchedTransportOptions } from "./batched-transp
 export { ConsoleTransport } from "./console-transport.js";
 export { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
 export type { TraceHandle } from "./trace-handle.js";
-export type { Transport, TransportErrorHandler } from "./transport.js";
+export type { RunHandle } from "./run-handle.js";
+export type {
+  CreateRunPayload,
+  EndRunPayload,
+  Transport,
+  TransportErrorHandler,
+} from "./transport.js";
 export { SDK_NAME, SDK_VERSION } from "./version.js";
 
 export type {
   AgentGaugeMetadata,
+  EndRunInput,
   EndTraceInput,
   FailTraceInput,
+  RunStatus,
+  StartRunInput,
   StartTraceInput,
+  TerminalRunStatus,
   TokenUsage,
   TraceError,
   TraceEvent,

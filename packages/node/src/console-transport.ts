@@ -1,5 +1,5 @@
 import type { TraceEvent } from "@agentgauge/core";
-import type { Transport } from "./transport.js";
+import type { CreateRunPayload, EndRunPayload, Transport } from "./transport.js";
 
 /**
  * Development transport that prints normalized telemetry to the console.
@@ -12,6 +12,14 @@ export class ConsoleTransport implements Transport {
   async send(event: TraceEvent): Promise<void> {
     // Intentionally print the event for local debugging.
     console.log("[agentgauge]", JSON.stringify(event));
+  }
+
+  async createRun(payload: CreateRunPayload): Promise<void> {
+    console.log("[agentgauge] createRun", JSON.stringify(payload));
+  }
+
+  async endRun(runId: string, payload: EndRunPayload): Promise<void> {
+    console.log("[agentgauge] endRun", JSON.stringify({ runId, ...payload }));
   }
 
   async flush(): Promise<void> {

@@ -6,6 +6,8 @@ Track requests, tokens, cost, latency, errors, agents, models, and traces in rea
 
 [![npm @agentgauge/node](https://img.shields.io/npm/v/@agentgauge/node.svg?label=%40agentgauge%2Fnode)](https://www.npmjs.com/package/@agentgauge/node)
 [![npm @agentgauge/openai](https://img.shields.io/npm/v/@agentgauge/openai.svg?label=%40agentgauge%2Fopenai)](https://www.npmjs.com/package/@agentgauge/openai)
+[![npm @agentgauge/anthropic](https://img.shields.io/npm/v/@agentgauge/anthropic.svg?label=%40agentgauge%2Fanthropic)](https://www.npmjs.com/package/@agentgauge/anthropic)
+[![npm @agentgauge/gemini](https://img.shields.io/npm/v/@agentgauge/gemini.svg?label=%40agentgauge%2Fgemini)](https://www.npmjs.com/package/@agentgauge/gemini)
 [![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -22,7 +24,7 @@ See which agents are running, how many tokens they consume, what they cost, whic
 
 ## Dashboard
 
-The self-hosted dashboard shows overview KPIs, agents, traces, and API-key settings.
+The self-hosted dashboard shows overview KPIs, agents, runs, traces, API keys, and model pricing.
 
 Screenshots belong in [`docs/assets/`](./docs/assets/) (see that folder’s README). Add PNGs named:
 
@@ -40,7 +42,9 @@ Then reference them here once captured from a local demo (never include real sec
 
 - Real-time dashboard updates (SSE)
 - Manual AI agent / request tracing
-- Automatic OpenAI instrumentation
+- Run / task-level observability (explicit start/end, independent of child errors)
+- Retry and attempt visibility inside a run
+- Automatic OpenAI / Anthropic / Gemini instrumentation
 - Token usage tracking
 - Server-side estimated cost intelligence
 - Agent-level analytics
@@ -49,7 +53,7 @@ Then reference them here once captured from a local demo (never include real sec
 - Error tracking
 - Trace explorer with filters and pagination
 - Project API-key create / list / revoke
-- Historical model pricing rows
+- Historical model pricing, including custom models and effective-dated updates from the dashboard
 - Self-hosted API + PostgreSQL + dashboard
 - Metadata-first / privacy-first telemetry
 
@@ -93,6 +97,32 @@ await gauge.shutdown();
 
 For local development without a backend, use `transport: { type: "console" }` instead of `apiKey` / `endpoint`.
 
+### Run / task-level observability
+
+```ts
+const run = gauge.startRun({
+  name: "customer-support-request",
+  agentId: "support-agent",
+});
+
+try {
+  const trace = gauge.startTrace({
+    agentId: "support-agent",
+    runId: run.id,
+    operationId: "lookup_customer",
+    attempt: 1,
+  });
+  // ... work ...
+  trace.end({ inputTokens: 100, outputTokens: 40 });
+  await run.end({ status: "success" });
+} catch (error) {
+  await run.end({ status: "error" });
+  throw error;
+}
+```
+
+Final run status is declared by your application — child request errors do not automatically fail the run.
+
 ### OpenAI instrumentation
 
 ```ts
@@ -133,7 +163,7 @@ AgentGauge does **not** replace your provider API key. Both may be required when
 Your AI application
       │
       ▼
-@agentgauge/node / @agentgauge/openai
+@agentgauge/node / openai / anthropic / gemini
       │
       ▼
 AgentGauge API
@@ -177,26 +207,29 @@ Details:
 
 ## Packages
 
-| Package                                                                  | Purpose                              |
-| ------------------------------------------------------------------------ | ------------------------------------ |
-| [`@agentgauge/core`](https://www.npmjs.com/package/@agentgauge/core)     | Provider-neutral telemetry contracts |
-| [`@agentgauge/node`](https://www.npmjs.com/package/@agentgauge/node)     | Node.js SDK and transports           |
-| [`@agentgauge/openai`](https://www.npmjs.com/package/@agentgauge/openai) | OpenAI automatic instrumentation     |
+| Package                                                                        | Purpose                                 |
+| ------------------------------------------------------------------------------ | --------------------------------------- |
+| [`@agentgauge/core`](https://www.npmjs.com/package/@agentgauge/core)           | Provider-neutral telemetry contracts    |
+| [`@agentgauge/node`](https://www.npmjs.com/package/@agentgauge/node)           | Node.js SDK and transports              |
+| [`@agentgauge/openai`](https://www.npmjs.com/package/@agentgauge/openai)       | OpenAI automatic instrumentation        |
+| [`@agentgauge/anthropic`](https://www.npmjs.com/package/@agentgauge/anthropic) | Anthropic automatic instrumentation     |
+| [`@agentgauge/gemini`](https://www.npmjs.com/package/@agentgauge/gemini)       | Google Gemini automatic instrumentation |
 
 Apps under `apps/` (`api`, `worker`, `dashboard`) and `packages/db` are part of the self-hosted platform and are not published to npm.
 
 ---
 
-## OpenAI support
+## Provider support
 
 Supported (**non-streaming**):
 
-- `responses.create`
-- `chat.completions.create`
+- OpenAI `responses.create` and `chat.completions.create` (`@agentgauge/openai`)
+- Anthropic `messages.create` (`@agentgauge/anthropic`)
+- Google Gemini `models.generateContent` (`@agentgauge/gemini`)
 
-Streaming (`stream: true`) currently passes through **without** AgentGauge telemetry.
+Streaming requests currently pass through **without** AgentGauge telemetry.
 
-Not instrumented yet: embeddings, images, audio, assistants, realtime, batches, and other providers.
+Not instrumented yet: embeddings, images, audio, assistants, realtime, and batches.
 
 ---
 
@@ -221,9 +254,10 @@ Not instrumented yet: embeddings, images, audio, assistants, realtime, batches, 
 
 - Cost is calculated **server-side** on ingest.
 - Pricing uses provider + model + effective date ranges in `model_pricing`.
-- Historical calculated costs remain stable for existing rows.
-- Unknown models keep token counts and show **Cost unavailable** (never a fabricated `$0`).
-- Pricing tables require maintenance and are **not** guaranteed to mirror live provider rate cards.
+- AgentGauge ships default prices. Self-hosted admins can add custom models or override a default from **Settings → Model pricing**.
+- Updates are effective-dated. Historical pricing rows stay in place, and already priced traces keep their stored cost.
+- Unknown models keep token counts and show **Cost unavailable** (never a fabricated `$0`) until a matching rate exists.
+- Pricing tables require maintenance and are **not** guaranteed to mirror live provider rate cards. AgentGauge does not scrape provider price pages.
 
 Costs are **estimates** for observability — not provider invoice amounts.
 
@@ -259,14 +293,16 @@ Configure `apps/dashboard/.env.local`, then `pnpm dev`. Full steps: [`docs/SELF_
 
 ## API overview
 
-| Method       | Path                                |
-| ------------ | ----------------------------------- |
-| `POST`       | `/v1/traces`, `/v1/traces/batch`    |
-| `GET`        | `/v1/usage`                         |
-| `GET`        | `/v1/agents`, `/v1/agents/:agentId` |
-| `GET`        | `/v1/traces`, `/v1/traces/:eventId` |
-| `GET`        | `/v1/events/stream`                 |
-| `GET`/`POST` | `/v1/api-keys` (+ revoke)           |
+| Method       | Path                                     |
+| ------------ | ---------------------------------------- |
+| `POST`       | `/v1/traces`, `/v1/traces/batch`         |
+| `GET`        | `/v1/usage`                              |
+| `GET`        | `/v1/agents`, `/v1/agents/:agentId`      |
+| `GET`        | `/v1/traces`, `/v1/traces/:eventId`      |
+| `GET`/`POST` | `/v1/runs` (+ `/:runId`, `/:runId/end`)  |
+| `GET`        | `/v1/events/stream`                      |
+| `GET`/`POST` | `/v1/api-keys` (+ revoke)                |
+| `GET`/`POST` | `/v1/model-pricing` (+ supersede, reset) |
 
 See [`docs/API.md`](./docs/API.md) and `GET /openapi.json` for details.
 
@@ -314,7 +350,7 @@ Automated coverage includes unit tests, API integration tests, database tests, S
 
 AgentGauge is an **early public MVP / pre-1.0** project. APIs and schemas may still evolve. See [CHANGELOG.md](./CHANGELOG.md).
 
-Current prepared release line: **`0.5.0`** (real-time dashboard via SSE).
+Current release: **`0.7.0`**.
 
 ---
 
@@ -322,7 +358,6 @@ Current prepared release line: **`0.5.0`** (real-time dashboard via SSE).
 
 Directional only — no dates:
 
-- Multi-provider instrumentation
 - Budgets and alerts
 - Deeper agent / tool tracing
 - Distributed real-time event delivery

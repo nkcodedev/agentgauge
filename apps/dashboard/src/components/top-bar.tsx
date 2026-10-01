@@ -9,6 +9,7 @@ import { RangeFilter } from "@/components/range-filter";
 import { CommandPalette } from "@/components/command-palette";
 
 function crumbs(pathname: string): string[] {
+  if (pathname.startsWith("/settings/model-pricing")) return ["Settings", "Model pricing"];
   if (pathname.startsWith("/settings")) return ["Settings", "API keys"];
   if (pathname.startsWith("/agents/"))
     return ["Agents", decodeURIComponent(pathname.split("/")[2] ?? "")];

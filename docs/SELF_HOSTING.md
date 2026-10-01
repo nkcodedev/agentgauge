@@ -53,6 +53,17 @@ Dashboard auth for the MVP is a **server-side project API key** (`AGENTGAUGE_API
 
 The browser never receives the project key. Dashboard routes proxy JSON and SSE through Next.js BFF handlers that attach the server-only key.
 
+## Model pricing
+
+AgentGauge ships default prices for OpenAI, Anthropic, and Google models. Self-hosted administrators can review and extend that catalog at `/settings/model-pricing`.
+
+- Prices are matched by exact provider + model and an effective date range.
+- Adding a rate for a seeded model stores an **override**. A provider or model AgentGauge does not ship is **custom**.
+- Updating a rate closes the previous row and appends a new one. Already priced traces keep their stored cost.
+- New traces, and eligible unpriced traces picked up by the background worker, use the new rate.
+- Estimated cost is not an invoice. Cache, batch, long-context, and enterprise rates are not fully modeled.
+- The catalog is installation-wide. The dashboard project API key can change it. There is no separate billing admin role.
+
 ## Related
 
 - [API.md](./API.md) — HTTP endpoints

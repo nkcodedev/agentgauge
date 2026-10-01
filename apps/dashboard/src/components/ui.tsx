@@ -46,6 +46,11 @@ export function ChartCard({
   );
 }
 
+export const dataTableClass =
+  "w-max min-w-full border-collapse whitespace-nowrap text-left text-xs";
+export const dataHeadClass = "sticky top-0 bg-muted text-2xs text-secondary";
+export const dataCellClass = "px-2 py-2 align-middle";
+
 export function KpiCard({
   label,
   value,
@@ -60,7 +65,7 @@ export function KpiCard({
   sparkline?: number[];
 }) {
   return (
-    <Card className="px-4 py-3">
+    <Card className="rounded-lg px-4 py-3">
       <div className="text-[13px] text-secondary">{label}</div>
       <div className="mt-1 flex items-end justify-between gap-3">
         <div

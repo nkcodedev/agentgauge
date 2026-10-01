@@ -159,4 +159,104 @@ describe("SSE live events", () => {
     expect(seen).toContain(own.eventId);
     unsub();
   });
+
+  it("streams run.created and run.updated", async () => {
+    const res = await fetch(`${baseUrl}/v1/events/stream`, {
+      headers: { authorization: tenant.authHeader },
+    });
+    expect(res.status).toBe(200);
+
+    const runId = `sse-run-${crypto.randomUUID()}`;
+    const createPromise = app.inject({
+      method: "POST",
+      url: "/v1/runs",
+      headers: { authorization: tenant.authHeader },
+      payload: {
+        id: runId,
+        name: "sse-run",
+        agentId: "sse-agent",
+      },
+    });
+
+    const afterCreate = await readSseUntil(res, (chunk) => chunk.includes("run.created"));
+    const createRes = await createPromise;
+    expect(createRes.statusCode).toBe(201);
+    expect(afterCreate).toContain("event: run.created");
+    expect(afterCreate).toContain(runId);
+
+    const res2 = await fetch(`${baseUrl}/v1/events/stream`, {
+      headers: { authorization: tenant.authHeader },
+    });
+    const endPromise = app.inject({
+      method: "POST",
+      url: `/v1/runs/${runId}/end`,
+      headers: { authorization: tenant.authHeader },
+      payload: { status: "success" },
+    });
+    const afterEnd = await readSseUntil(res2, (chunk) => chunk.includes("run.updated"));
+    const endRes = await endPromise;
+    expect(endRes.statusCode).toBe(200);
+    expect(afterEnd).toContain("event: run.updated");
+    expect(afterEnd).toContain('"status":"success"');
+
+    const res3 = await fetch(`${baseUrl}/v1/events/stream`, {
+      headers: { authorization: tenant.authHeader },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/v1/runs/${runId}/end`,
+      headers: { authorization: tenant.authHeader },
+      payload: { status: "success" },
+    });
+    const idle = await readSseUntil(
+      res3,
+      (chunk) => chunk.includes("run.updated") && chunk.split("run.updated").length > 2,
+      800,
+    );
+    expect(idle.split("run.updated").length).toBeLessThan(2);
+  });
+
+  it("emits provider-neutral trace.created for anthropic and google synthetic traces", async () => {
+    for (const provider of [
+      {
+        provider: "anthropic",
+        model: "claude-fake",
+        operationName: "anthropic.messages.create",
+        agentId: "sse-anthropic-agent",
+      },
+      {
+        provider: "google",
+        model: "gemini-fake",
+        operationName: "google.models.generateContent",
+        agentId: "sse-google-agent",
+      },
+    ] as const) {
+      const res = await fetch(`${baseUrl}/v1/events/stream`, {
+        headers: { authorization: tenant.authHeader },
+      });
+      expect(res.status).toBe(200);
+
+      const event = makeTraceEvent({
+        ...provider,
+        usage: { inputTokens: 11, outputTokens: 7, totalTokens: 18 },
+      });
+
+      const ingestPromise = app.inject({
+        method: "POST",
+        url: "/v1/traces",
+        headers: { authorization: tenant.authHeader },
+        payload: { events: [event] },
+      });
+
+      const buffer = await readSseUntil(res, (chunk) => chunk.includes("trace.created"));
+      const ingest = await ingestPromise;
+      expect(ingest.statusCode).toBe(202);
+      expect(buffer).toContain("event: trace.created");
+      expect(buffer).toContain(event.eventId);
+      expect(buffer).toContain(provider.agentId);
+      // SSE payload remains lightweight / provider-neutral (no provider-specific event types)
+      expect(buffer).not.toContain("anthropic.trace.created");
+      expect(buffer).not.toContain("google.trace.created");
+    }
+  });
 });

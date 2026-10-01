@@ -3,6 +3,7 @@ import {
   agents,
   calculateCost,
   modelPricing,
+  runs,
   traces,
   type Database,
   type PricingRow,
@@ -17,6 +18,22 @@ export class ProjectMismatchError extends Error {
   }
 }
 
+export class RunNotFoundError extends Error {
+  readonly statusCode = 400;
+  constructor(runId: string) {
+    super(`run "${runId}" not found`);
+    this.name = "RunNotFoundError";
+  }
+}
+
+export class AgentMismatchError extends Error {
+  readonly statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "AgentMismatchError";
+  }
+}
+
 async function loadPricing(db: Database): Promise<PricingRow[]> {
   const rows = await db.select().from(modelPricing);
   return rows.map((r) => ({
@@ -27,6 +44,7 @@ async function loadPricing(db: Database): Promise<PricingRow[]> {
     currency: r.currency,
     effectiveFrom: r.effectiveFrom,
     effectiveTo: r.effectiveTo,
+    source: r.source,
   }));
 }
 
@@ -103,6 +121,24 @@ export async function ingestEvent(
 
   const startedAt = new Date(event.startedAt);
   const endedAt = new Date(event.endedAt);
+
+  if (event.runId !== undefined) {
+    const runRows = await db
+      .select({ agentKey: agents.agentKey })
+      .from(runs)
+      .innerJoin(agents, eq(agents.id, runs.agentId))
+      .where(and(eq(runs.id, event.runId), eq(runs.projectId, project.id)))
+      .limit(1);
+    if (!runRows[0]) {
+      throw new RunNotFoundError(event.runId);
+    }
+    if (runRows[0].agentKey !== event.agentId) {
+      throw new AgentMismatchError(
+        `trace agentId "${event.agentId}" does not match run agent "${runRows[0].agentKey}"`,
+      );
+    }
+  }
+
   const agent = await findOrCreateAgent(db, project.id, event.agentId, endedAt);
 
   const pricingRows = await loadPricing(db);
@@ -128,6 +164,9 @@ export async function ingestEvent(
       traceId: event.traceId,
       projectId: project.id,
       agentId: agent.id,
+      runId: event.runId ?? null,
+      operationId: event.operationId ?? null,
+      attempt: event.attempt ?? null,
       environment: event.environment ?? null,
       provider: event.provider ?? null,
       model: event.model ?? null,

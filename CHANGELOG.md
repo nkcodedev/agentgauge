@@ -2,6 +2,33 @@
 
 All notable changes to AgentGauge packages are documented here.
 
+## 0.7.0
+
+### Added
+
+- `@agentgauge/anthropic` — automatic instrumentation for `messages.create` (non-streaming)
+- `@agentgauge/gemini` — automatic instrumentation for `models.generateContent` (non-streaming)
+- Multi-provider cost intelligence with maintained default prices for OpenAI, Anthropic, and Google
+- Run / task-level observability: `startRun` / `endRun`, `POST /v1/runs`, and dashboard `/runs`
+- Optional `runId`, `operationId`, and `attempt` on traces, including retry visibility
+- Run aggregates for request count, tokens, estimated cost, duration, errors, and retries
+- Real-time `run.created` and `run.updated` events
+- Pricing Management UI at `/settings/model-pricing` for self-hosted administrators
+- Custom model pricing and installation-level overrides of AgentGauge defaults
+- Effective-dated pricing updates that keep history instead of overwriting it
+- Dashboard redesign across overview, agents, runs, traces, and settings
+
+### Notes
+
+- A run’s final status is declared by the application. Child request errors do not automatically fail the run, and AgentGauge does not infer task success.
+- AgentGauge does not detect agent loops.
+- Provider streaming requests are still passed through without telemetry.
+- The event bus remains process-local (one API process).
+- Costs are estimates from token usage and configured prices. They can differ from provider invoices.
+- Cache, batch, long-context, priority, and enterprise rates are not fully modeled. Add a custom rate when you need one.
+- Model pricing is installation-wide. Any valid project API key on that server can change it. There is no separate billing admin role.
+- Already priced traces keep their stored cost when a rate changes.
+
 ## 0.5.0
 
 ### Added

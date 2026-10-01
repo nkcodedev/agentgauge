@@ -1,10 +1,21 @@
 import { ConfigurationError, type TraceEvent } from "@agentgauge/core";
-import type { Transport } from "./transport.js";
+import type { CreateRunPayload, EndRunPayload, Transport } from "./transport.js";
 
 export interface HttpTransportOptions {
   readonly endpoint: string;
   readonly apiKey?: string;
   readonly fetchImpl?: typeof fetch;
+}
+
+function deriveApiBase(endpoint: string): string {
+  const normalized = endpoint.trim().replace(/\/+$/, "");
+  if (normalized.endsWith("/v1/traces/batch")) {
+    return normalized.slice(0, -"/v1/traces/batch".length);
+  }
+  if (normalized.endsWith("/v1/traces")) {
+    return normalized.slice(0, -"/v1/traces".length);
+  }
+  return normalized;
 }
 
 /**
@@ -16,6 +27,7 @@ export interface HttpTransportOptions {
  */
 export class HttpTransport implements Transport {
   private readonly endpoint: string;
+  private readonly apiBase: string;
   private readonly apiKey: string | undefined;
   private readonly fetchImpl: typeof fetch;
 
@@ -24,6 +36,7 @@ export class HttpTransport implements Transport {
       throw new ConfigurationError("HttpTransport endpoint must be a non-empty string");
     }
     this.endpoint = options.endpoint.trim();
+    this.apiBase = deriveApiBase(this.endpoint);
     this.apiKey =
       typeof options.apiKey === "string" && options.apiKey.trim().length > 0
         ? options.apiKey.trim()
@@ -31,7 +44,7 @@ export class HttpTransport implements Transport {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async send(event: TraceEvent): Promise<void> {
+  private authHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       "content-type": "application/json",
       accept: "application/json",
@@ -39,15 +52,45 @@ export class HttpTransport implements Transport {
     if (this.apiKey !== undefined) {
       headers.authorization = `Bearer ${this.apiKey}`;
     }
+    return headers;
+  }
 
+  async send(event: TraceEvent): Promise<void> {
     const response = await this.fetchImpl(this.endpoint, {
       method: "POST",
-      headers,
+      headers: this.authHeaders(),
       body: JSON.stringify({ events: [event] }),
     });
 
     if (!response.ok) {
       throw new Error(`AgentGauge HTTP transport failed with status ${response.status}`);
+    }
+  }
+
+  async createRun(payload: CreateRunPayload): Promise<void> {
+    const response = await this.fetchImpl(`${this.apiBase}/v1/runs`, {
+      method: "POST",
+      headers: this.authHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AgentGauge HTTP createRun failed with status ${response.status}`);
+    }
+  }
+
+  async endRun(runId: string, payload: EndRunPayload): Promise<void> {
+    const response = await this.fetchImpl(
+      `${this.apiBase}/v1/runs/${encodeURIComponent(runId)}/end`,
+      {
+        method: "POST",
+        headers: this.authHeaders(),
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`AgentGauge HTTP endRun failed with status ${response.status}`);
     }
   }
 

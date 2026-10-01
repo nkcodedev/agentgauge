@@ -8,7 +8,8 @@ const destinations = [
   { href: "/agents", label: "Agents" },
   { href: "/runs", label: "Runs" },
   { href: "/traces", label: "Traces" },
-  { href: "/settings/api-keys", label: "Settings" },
+  { href: "/settings/api-keys", label: "API keys" },
+  { href: "/settings/model-pricing", label: "Model pricing" },
 ];
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {

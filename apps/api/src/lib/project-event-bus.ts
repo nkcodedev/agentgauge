@@ -5,15 +5,31 @@
  * Multiple API replicas will not share subscriptions until a distributed
  * backend replaces this implementation.
  */
-export type ProjectEventType = "trace.created";
+export type ProjectEventType = "trace.created" | "run.created" | "run.updated";
 
-export interface ProjectEvent {
-  readonly type: ProjectEventType;
-  readonly projectId: string;
-  readonly agentId: string;
-  readonly eventId: string;
-  readonly occurredAt: string;
-}
+export type ProjectEvent =
+  | {
+      readonly type: "trace.created";
+      readonly projectId: string;
+      readonly agentId: string;
+      readonly eventId: string;
+      readonly occurredAt: string;
+    }
+  | {
+      readonly type: "run.created";
+      readonly projectId: string;
+      readonly agentId: string;
+      readonly runId: string;
+      readonly occurredAt: string;
+    }
+  | {
+      readonly type: "run.updated";
+      readonly projectId: string;
+      readonly agentId: string;
+      readonly runId: string;
+      readonly status: string;
+      readonly occurredAt: string;
+    };
 
 export type ProjectEventListener = (event: ProjectEvent) => void;
 
