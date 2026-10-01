@@ -17,7 +17,7 @@ export function RangeFilter({ defaultPreset = "7d" }: { defaultPreset?: RangePre
 
   return (
     <div
-      className="inline-flex rounded-md border border-ink-200 bg-white p-1"
+      className="inline-flex rounded-control border border-line bg-surface p-0.5"
       role="group"
       aria-label="Time range"
     >
@@ -27,8 +27,8 @@ export function RangeFilter({ defaultPreset = "7d" }: { defaultPreset?: RangePre
           <button
             key={p.id}
             type="button"
-            className={`rounded px-3 py-1.5 text-sm ${
-              active ? "bg-ink-900 text-white" : "text-ink-700 hover:bg-ink-100"
+            className={`rounded-control px-2.5 py-1 text-2xs ${
+              active ? "bg-fg text-surface" : "text-secondary hover:bg-muted"
             }`}
             aria-pressed={active}
             onClick={() => {
@@ -51,6 +51,7 @@ export function MobileNav() {
       {[
         ["/overview", "Overview"],
         ["/agents", "Agents"],
+        ["/runs", "Runs"],
         ["/traces", "Traces"],
         ["/settings/api-keys", "Settings"],
       ].map(([href, label]) => (

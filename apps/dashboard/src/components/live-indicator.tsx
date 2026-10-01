@@ -21,7 +21,7 @@ export function LiveIndicator() {
 
   return (
     <div
-      className="mt-4 flex items-center gap-2 text-xs text-ink-600"
+      className="flex items-center gap-2 text-2xs text-secondary"
       role="status"
       aria-live="polite"
       data-testid="live-indicator"
@@ -30,7 +30,7 @@ export function LiveIndicator() {
       <span
         aria-hidden
         className={`inline-block h-2 w-2 rounded-full ${
-          live ? "bg-emerald-500" : status === "offline" ? "bg-ink-400" : "bg-amber-500"
+          live ? "animate-pulse bg-ok" : status === "offline" ? "bg-faint" : "bg-warn"
         }`}
       />
       <span>{labelFor(status)}</span>

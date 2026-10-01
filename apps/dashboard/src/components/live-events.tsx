@@ -25,14 +25,31 @@ export interface TraceCreatedEvent {
 /** Debounce window for coalescing bursty telemetry into a single refetch. */
 export const LIVE_REFRESH_DEBOUNCE_MS = 500;
 
+/** SSE event types that trigger a debounced RSC refresh. */
+export const LIVE_SSE_REFRESH_EVENTS = ["trace.created", "run.created", "run.updated"] as const;
+
 interface LiveEventsContextValue {
   readonly status: LiveConnectionStatus;
+  readonly autoRefresh: boolean;
+  readonly setAutoRefresh: (enabled: boolean) => void;
 }
 
-const LiveEventsContext = createContext<LiveEventsContextValue>({ status: "connecting" });
+const LiveEventsContext = createContext<LiveEventsContextValue>({
+  status: "connecting",
+  autoRefresh: true,
+  setAutoRefresh: () => undefined,
+});
 
 export function useLiveConnectionStatus(): LiveConnectionStatus {
   return useContext(LiveEventsContext).status;
+}
+
+export function useAutoRefresh(): {
+  autoRefresh: boolean;
+  setAutoRefresh: (enabled: boolean) => void;
+} {
+  const { autoRefresh, setAutoRefresh } = useContext(LiveEventsContext);
+  return { autoRefresh, setAutoRefresh };
 }
 
 /**
@@ -43,10 +60,18 @@ export function useLiveConnectionStatus(): LiveConnectionStatus {
 export function LiveEventsProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [status, setStatus] = useState<LiveConnectionStatus>("connecting");
+  const [autoRefresh, setAutoRefreshState] = useState(true);
+  const autoRefreshRef = useRef(true);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sourceRef = useRef<EventSource | null>(null);
 
+  const setAutoRefresh = useCallback((enabled: boolean) => {
+    autoRefreshRef.current = enabled;
+    setAutoRefreshState(enabled);
+  }, []);
+
   const scheduleRefresh = useCallback(() => {
+    if (!autoRefreshRef.current) return;
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = setTimeout(() => {
       refreshTimer.current = null;
@@ -75,11 +100,13 @@ export function LiveEventsProvider({ children }: { children: ReactNode }) {
         setStatus("live");
       });
 
-      source.addEventListener("trace.created", () => {
-        if (cancelled) return;
-        setStatus("live");
-        scheduleRefresh();
-      });
+      for (const eventType of LIVE_SSE_REFRESH_EVENTS) {
+        source.addEventListener(eventType, () => {
+          if (cancelled) return;
+          setStatus("live");
+          scheduleRefresh();
+        });
+      }
 
       source.onerror = () => {
         if (cancelled) return;
@@ -103,7 +130,10 @@ export function LiveEventsProvider({ children }: { children: ReactNode }) {
     };
   }, [scheduleRefresh]);
 
-  const value = useMemo(() => ({ status }), [status]);
+  const value = useMemo(
+    () => ({ status, autoRefresh, setAutoRefresh }),
+    [status, autoRefresh, setAutoRefresh],
+  );
   return <LiveEventsContext.Provider value={value}>{children}</LiveEventsContext.Provider>;
 }
 

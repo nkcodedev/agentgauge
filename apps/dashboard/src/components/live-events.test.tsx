@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createDebouncedRefresh,
   LIVE_REFRESH_DEBOUNCE_MS,
+  LIVE_SSE_REFRESH_EVENTS,
   LiveEventsProvider,
 } from "./live-events";
 import { render, screen } from "@testing-library/react";
@@ -11,6 +12,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
   usePathname: () => "/overview",
 }));
+
+describe("LIVE_SSE_REFRESH_EVENTS", () => {
+  it("includes run lifecycle events", () => {
+    expect(LIVE_SSE_REFRESH_EVENTS).toContain("trace.created");
+    expect(LIVE_SSE_REFRESH_EVENTS).toContain("run.created");
+    expect(LIVE_SSE_REFRESH_EVENTS).toContain("run.updated");
+  });
+});
 
 describe("createDebouncedRefresh", () => {
   it("coalesces bursts into a single refresh", async () => {
