@@ -110,10 +110,14 @@ Public MVP ≈ Milestone 4. Earlier milestones are incremental, releasable slice
 
 ### Exit criteria
 
-- SDK can send events to hosted/local API with API key
-- Events queryable at the data layer (even if UI is minimal)
-- Estimated costs stored for known pricing entries
-- Security basics: TLS in hosted env, validation, rate/size limits
+- SDK can send events to hosted/local API with API key ✅
+- Events queryable via `GET /v1/usage`, `/v1/agents`, `/v1/traces` ✅
+- Estimated costs stored for known pricing entries; unknown models → null cost ✅
+- Security basics: API-key hashing, validation, rate/size limits, tenant isolation ✅
+- Migrations initialize empty Postgres; seed creates local API key ✅
+- E2E SDK → API → DB → usage passes ✅
+
+**Status:** Complete for `0.3.0` (implementation present; npm publish / git tag deferred).
 
 ---
 

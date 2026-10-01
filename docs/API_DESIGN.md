@@ -1,216 +1,114 @@
 # AgentGauge API Design
 
-**Status:** Intentional design notes — **not implemented yet**
-**Related:** [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md), [SECURITY.md](./SECURITY.md), [VERSIONING_AND_RELEASES.md](./VERSIONING_AND_RELEASES.md)
+**Status:** Implemented for Milestone 3 (`0.3.0`)
+**Related:** [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md), [SECURITY.md](./SECURITY.md), [ARCHITECTURE.md](./ARCHITECTURE.md)
 
-This document captures the intended HTTP API style for AgentGauge cloud services. It deliberately avoids locking unused endpoints. Implement only what the current milestone requires.
+Machine-readable sketch: `GET /openapi.json` on the API process.
 
 ---
 
 ## Design Principles
 
-1. **Small surface first** — Ship `POST /v1/traces` before a large query API.
-2. **Predictable JSON** — Consistent success and error envelopes.
-3. **Version in the path** — `/v1/...` for the first public contract.
-4. **Auth by default** — No anonymous ingestion in hosted environments.
-5. **Backwards compatible within a major** — Additive changes preferred; see compatibility philosophy below.
-6. **Do not speculate** — Optional future routes listed here are placeholders for planning, not implementation mandates.
+1. **Small surface** — Ingestion + usage/query only; no dashboard management APIs yet.
+2. **Predictable JSON** — Simple success bodies; `{ error: { code, message } }` on failure.
+3. **Version in the path** — `/v1/...`
+4. **Auth by default** — All `/v1/*` routes require a project API key.
+5. **API key establishes tenant** — Payload `project` cannot switch tenants.
 
 ---
 
-## Initial Ingestion API
+## Authentication
+
+```http
+Authorization: Bearer ag_live_<secret>
+```
+
+or `ag_test_<secret>` for non-production keys.
+
+- Full plaintext key is shown **once** at creation (seed / `pnpm dev:create-api-key`).
+- Server stores `key_prefix` + SHA-256 hash (optional pepper via `AGENTGAUGE_API_KEY_PEPPER`).
+- MVP: the same project API key authorizes ingestion **and** query routes.
+
+---
+
+## Ingestion
 
 ### `POST /v1/traces`
 
-Accepts one or more `TraceEvent` records from SDKs.
+Also available as `POST /v1/traces/batch` (alias).
 
-**Purpose:** Cloud telemetry ingestion for MVP milestones (primarily Milestone 3+).
+**Request:**
 
-**Conceptual request:**
-
-```http
-POST /v1/traces HTTP/1.1
-Host: api.agentgauge.dev
-Authorization: Bearer ag_live_...
-Content-Type: application/json
-
+```json
 {
   "events": [ { "...TraceEvent": "..." } ]
 }
 ```
 
-**Notes:**
+- Max **100** events per batch
+- Body size limit **256 KiB**
+- Validate **entire batch first**; if any event is malformed → **400** and **no** rows written
+- Duplicate `eventId` → **idempotent** (unique DB constraint); response still **202**
 
-- Support batch upload from the start (SDK batching).
-- Validate each event; define partial-failure behavior at implementation time (reject all vs accept valid subset) and document it before GA of the endpoint.
-- Enforce body size limits and per-batch event count limits.
+**Success:**
 
----
-
-## Possible Future Query APIs
-
-These are **planning hints only**. Do not implement until a milestone explicitly requires them.
-
-```text
-GET /v1/usage
-GET /v1/agents
-GET /v1/agents/:id
-GET /v1/traces
-GET /v1/costs
+```http
+202 Accepted
 ```
-
-Additional management endpoints (e.g. API key CRUD) will be defined with the dashboard milestone.
-
----
-
-## Authentication Conventions
-
-| Mechanism | Usage |
-|-----------|--------|
-| API key via `Authorization: Bearer <key>` | Primary for SDK ingestion and programmatic access |
-| Session / user auth | Dashboard (exact scheme decided at dashboard implementation) |
-
-### API-key format concept
-
-Illustrative format (finalize at implementation):
-
-```text
-ag_<env>_<secret>
-
-Examples:
-  ag_live_...
-  ag_test_...
-```
-
-Properties:
-
-- Prefix identifies AgentGauge keys in secret scanning and developer mental models
-- Environment marker distinguishes live vs test
-- High-entropy secret portion
-- Server stores a **hash** of the secret; plaintext shown once at creation
-
-Do not treat this illustrative format as final until Milestone 3 locks it in code + docs.
-
----
-
-## Versioning Strategy
-
-- URL path version: `/v1`
-- SDKs target a specific API version via base URL paths
-- Additive optional JSON fields are allowed without bumping to `/v2`
-- Breaking changes require `/v2` or coordinated deprecation described in release notes
-- Package SemVer is separate from HTTP API path version, but should not diverge in spirit during early development
-
----
-
-## Request Validation
-
-- JSON only for V1 ingestion
-- Schema validation aligned with [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md)
-- Unknown fields: document chosen policy (prefer ignore for forward compatibility unless dangerous)
-- Type mismatches → `400` with field-level details where safe
-- Missing required fields → `400`
-
----
-
-## Standard Success Response
-
-Illustrative envelope:
 
 ```json
 {
-  "ok": true,
-  "data": {
-    "accepted": 1,
-    "eventIds": ["0193e0a2-7c1b-7b6e-9f3a-2d6c8f0a1b2c"]
-  }
+  "accepted": true,
+  "eventIds": ["..."],
+  "duplicates": ["..."]
 }
 ```
 
-Alternative minimal `202 Accepted` with a small body is acceptable for ingestion if documented. Pick one approach in Milestone 3 and keep it stable.
+**Rationale for 202:** Response acknowledges acceptance for persistence/cost processing. Current implementation enriches cost synchronously on ingest; worker handles any leftover `cost_status=pending` rows.
+
+**Project precedence:** API key's project is authoritative. If `event.project` is set and ≠ project `slug` → `400 project_mismatch`.
+
+**Environment:** Remains event-level metadata (`development` / `staging` / `production`).
 
 ---
 
-## Standard Error Response
+## Query APIs
 
-Illustrative envelope:
+All require the project API key. Results are **project-scoped**.
 
-```json
-{
-  "ok": false,
-  "error": {
-    "code": "invalid_request",
-    "message": "events[0].agentId is required",
-    "details": {
-      "field": "events[0].agentId"
-    }
-  }
-}
-```
+### `GET /v1/usage?from=&to=`
 
-Rules:
+Aggregates: `requests`, `inputTokens`, `outputTokens`, `totalTokens`, `estimatedCost`, `errors`, `averageLatencyMs`, plus `byAgent` / `byModel` / `byProvider`.
 
-- Stable `code` strings for clients
-- Human-readable `message`
-- No stack traces, SQL, or internal hosts in production responses
-- No echo of Authorization headers or API keys
+### `GET /v1/agents`
 
-### Suggested error codes (initial set)
+Agent summaries (`agentId`, first/last seen, request/token/cost/error/latency stats).
 
-| Code | Typical HTTP status |
-|------|---------------------|
-| `invalid_request` | 400 |
-| `unauthorized` | 401 |
-| `forbidden` | 403 |
-| `payload_too_large` | 413 |
-| `rate_limited` | 429 |
-| `internal_error` | 500 |
+### `GET /v1/agents/:agentId`
+
+One agent summary or `404`.
+
+### `GET /v1/traces`
+
+Cursor pagination (`limit`, `nextCursor`). Filters: `agentId`, `provider`, `model`, `status`, `from`, `to`.
 
 ---
 
-## Idempotency Considerations
+## Errors
 
-- SDKs will retry on transient network failures
-- Prefer client-generated `eventId` as a natural idempotency key for ingestion deduplication
-- Optional `Idempotency-Key` header may be added later for envelope-level retries; not required for first implementation if `eventId` dedupe exists
-- Document dedupe window and semantics when implemented
-
----
-
-## Rate-Limit Behavior
-
-- Rate limits apply per API key / project
-- On limit exceeded: HTTP `429` with `error.code = rate_limited`
-- Include standard headers when implemented, e.g. `Retry-After` and/or `X-RateLimit-*`
-- SDKs should backoff and **must not** surface rate limits as customer LLM failures
+| Status | Meaning |
+|--------|---------|
+| 400 | Validation / project mismatch |
+| 401 | Missing/invalid API key |
+| 404 | Agent not found |
+| 429 | Rate limited (in-process; not multi-instance authoritative) |
+| 500 | Internal (no stack traces in body) |
 
 ---
 
-## Backwards Compatibility Philosophy
+## Not in 0.3.0
 
-During `0.x`:
-
-- Breaking API changes are allowed but must be deliberate, documented, and preferably rare after Milestone 3 public ingestion
-- Prefer additive fields and new endpoints over changing meaning of existing fields
-- Deprecate with docs + changelog before removal when clients exist
-
-After `1.0.0` (future):
-
-- No breaking HTTP changes within `/v1` without deprecation period
-
----
-
-## What We Are Explicitly Not Specifying Yet
-
-- GraphQL / gRPC dual stacks
-- WebSocket ingestion
-- Public webhook fan-out APIs
-- Full OpenAPI file as a release artifact (recommended once `POST /v1/traces` is implemented)
-
----
-
-## Related Documents
-
-- [MILESTONES.md](./MILESTONES.md)
-- [SECURITY.md](./SECURITY.md)
-- [DECISIONS.md](./DECISIONS.md)
+- Dashboard session auth
+- API key CRUD UI
+- Budgets / alerts
+- Public multi-tenant hosted SaaS hardening beyond MVP controls

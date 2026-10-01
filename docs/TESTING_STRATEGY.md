@@ -7,6 +7,21 @@ AgentGauge aims for **high confidence without meaningless coverage chasing**. Te
 
 ---
 
+## Milestone 3 integration / database / E2E
+
+Requires local PostgreSQL (`docker compose up -d`):
+
+| Layer | Location | Covers |
+|-------|----------|--------|
+| Unit | `apps/api/src/lib/*.test.ts`, `packages/db/src/pricing.test.ts` | keys, schema, rate limit, cost math |
+| Integration | `apps/api/src/api.integration.test.ts` | auth, ingest, isolation, usage, pagination, batch |
+| Database | `packages/db/src/database.integration.test.ts` | constraints, FKs, enrich, cascades |
+| E2E | `apps/api/src/e2e.sdk.test.ts` | SDK → HTTP → API → DB → usage |
+
+Do not mock away PostgreSQL for these suites. Do not call live OpenAI.
+
+---
+
 ## Principles
 
 1. **Deterministic** — Same inputs produce the same results; no flaky time/network dependence without fakes.

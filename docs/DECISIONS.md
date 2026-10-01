@@ -308,6 +308,160 @@ Customers must debug against the real OpenAI SDK contract. Wrapping errors in Ag
 
 ---
 
+## ADR-015: API-key hashing uses SHA-256 (+ optional pepper)
+
+**Status:** Accepted
+
+### Context
+
+AgentGauge API keys are high-entropy CSPRNG secrets (`ag_live_` / `ag_test_`). Slow password KDFs (bcrypt/argon2) add latency to every authenticated request without material benefit against offline guessing of 256-bit secrets.
+
+### Decision
+
+Store `SHA-256(pepper || ":" || plaintext)` as hex. Optional `AGENTGAUGE_API_KEY_PEPPER` strengthens server-side secrecy. Never store plaintext after creation.
+
+### Consequences
+
+- Fast auth lookups by unique `key_hash`
+- Pepper rotation requires re-hashing or dual-verify windows (not implemented yet)
+- Documented as unsuitable for low-entropy user passwords
+
+---
+
+## ADR-016: Drizzle ORM + PostgreSQL
+
+**Status:** Accepted
+
+### Context
+
+Milestone 3 needs typed schema, deterministic migrations, and a lightweight Node/TS database layer.
+
+### Decision
+
+Use **PostgreSQL 16** with **Drizzle ORM** and SQL migrations under `packages/db/drizzle`. Private package `@agentgauge/db` owns schema/client/migrate/seed.
+
+### Consequences
+
+- No heavy enterprise ORM
+- Apps share one schema package
+- SDK packages must not depend on `@agentgauge/db`
+
+---
+
+## ADR-017: API key is the authoritative project identity
+
+**Status:** Accepted
+
+### Context
+
+SDK events may include optional `project`. Allowing payload project to select the tenant would enable cross-project writes with a stolen or misconfigured key path.
+
+### Decision
+
+The authenticated API key’s `project_id` is authoritative. If `event.project` is present and ≠ project `slug`, reject with `400 project_mismatch`. `environment` remains event-level metadata.
+
+### Consequences
+
+- Strong tenant isolation
+- SDK `project` is informational/validation for cloud mode
+
+---
+
+## ADR-018: eventId idempotency via unique constraint
+
+**Status:** Accepted
+
+### Context
+
+SDKs may retry HTTP delivery. Duplicate inserts would inflate usage/cost.
+
+### Decision
+
+`traces.event_id` is globally unique. Duplicate ingest returns `202` with the event listed under `duplicates` and does not insert a second row.
+
+### Consequences
+
+- Simple, durable idempotency without Redis
+- Clients should keep stable `eventId`s across retries
+
+---
+
+## ADR-019: Historical model pricing + stored costs
+
+**Status:** Accepted
+
+### Context
+
+Provider prices change. Recomputing historical reports from the latest price table would rewrite the past.
+
+### Decision
+
+`model_pricing` rows use `effective_from` / `effective_to`. Cost is calculated at ingest using pricing valid at `started_at` and **stored** on the trace (`input_cost`, `output_cost`, `total_cost`, `currency`). Unknown models leave costs null (`cost_status=unknown_model`).
+
+### Consequences
+
+- Past reports remain explainable
+- Seeded prices require maintenance; never invent prices for unknown models
+
+---
+
+## ADR-020: Decimal-safe cost arithmetic
+
+**Status:** Accepted
+
+### Context
+
+Binary floating point is unsafe for money-like values.
+
+### Decision
+
+Store costs/prices as PostgreSQL `numeric`. Compute in TypeScript with scaled integer/`bigint` math and half-up rounding to **10** decimal places for stored costs.
+
+### Consequences
+
+- Deterministic unit tests for pricing
+- Display layers may round further for UI later
+
+---
+
+## ADR-021: Worker polls pending cost_status
+
+**Status:** Accepted
+
+### Context
+
+Preferred architecture is API → durable row → worker enrichment. Redis/Kafka is unnecessary for MVP.
+
+### Decision
+
+Ingest enriches cost **synchronously** and sets `cost_status`. Worker polls `cost_status='pending'` for backfill/recovery. No Redis.
+
+### Consequences
+
+- Usage queries work immediately after ingest
+- Worker remains a real process with a durable queue table pattern
+
+---
+
+## ADR-022: Batch ingestion is all-or-nothing validation
+
+**Status:** Accepted
+
+### Context
+
+Partial batch acceptance complicates client retry semantics.
+
+### Decision
+
+Validate the entire `{ events }` batch first. Any malformed event → `400` and zero inserts. Duplicates within an otherwise valid batch remain idempotent at the DB layer.
+
+### Consequences
+
+- Deterministic failure mode
+- Max batch size 100
+
+---
+
 ## ADR template (for future entries)
 
 ```markdown

@@ -1,82 +1,63 @@
 # AgentGauge Security
 
-**Status:** Initial security principles (pre-implementation)
-**Related:** [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md), [API_DESIGN.md](./API_DESIGN.md), [PRODUCT_SCOPE.md](./PRODUCT_SCOPE.md)
+**Status:** Milestone 3 (`0.3.0`) controls implemented for local/self-hosted API
+**Related:** [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md), [API_DESIGN.md](./API_DESIGN.md), [DECISIONS.md](./DECISIONS.md)
 
-AgentGauge collects **operational telemetry**, not secrets and not conversational content by default. Security and privacy defaults are part of the product contract.
+AgentGauge collects **operational telemetry**, not secrets and not conversational content by default.
 
 ---
 
 ## Core Principles
 
-1. **Telemetry, not secrets** — The SDK captures agent operational metadata. It must not harvest provider API keys or application secrets.
-2. **Privacy-first defaults** — Raw prompts and completions are **not** captured by default (see [ADR-006](./DECISIONS.md#adr-006-raw-promptcompletion-capture-is-disabled-by-default)).
-3. **Least privilege** — API keys, database roles, and cloud permissions grant only what is required.
-4. **Defense in depth** — Validation, authn/authz, TLS, rate limits, and size limits work together.
-5. **Safe failure** — Security controls fail closed on the server; the SDK fails open for telemetry so customer apps are not disrupted ([ADR-005](./DECISIONS.md#adr-005-telemetry-collection-must-never-break-the-customers-application)).
+1. **Telemetry, not secrets**
+2. **Privacy-first defaults** — prompts/completions not captured
+3. **Least privilege** — project-scoped API keys
+4. **Defense in depth** — validation, auth, rate/size limits
+5. **Safe failure** — SDK best-effort; API fails closed
 
 ---
 
-## Secrets Handling
+## API keys (0.3.0)
 
-### AgentGauge API keys
+- Format: `ag_live_<secret>` or `ag_test_<secret>`
+- Generated with 32 bytes of CSPRNG entropy (base64url)
+- Stored as `key_prefix` + **SHA-256** hash of `pepper:plaintext` (see ADR-015)
+- Plaintext shown **once** at seed / `pnpm dev:create-api-key`
+- Never logged; never placed in TraceEvent payloads
+- Revocation via `revoked_at`
 
-- Must **never** be logged (SDK, API, worker, dashboard server logs, or error reports).
-- Must not appear in trace metadata, tags, or event payloads.
-- Store only hashed representations server-side where appropriate (e.g. keyed hash / password-hashing style for API keys — exact algorithm chosen at implementation time).
-- Display full secrets only once at creation time in the dashboard; thereafter show prefixes only.
-- Transmit only over TLS for hosted ingestion.
+## Tenant isolation
 
-### Provider API keys (OpenAI, etc.)
+- API key binds to one organization + project
+- All reads/writes are project-scoped
+- Payload `project` cannot redirect writes to another project (`project_mismatch`)
 
-- AgentGauge must **never collect** customer provider API keys unless a future architecture explicitly requires it and is approved via ADR.
-- Instrumentation reads responses from the already-configured provider SDK in the customer process; it does not ask users to paste provider keys into AgentGauge.
-- Docs and examples must not encourage putting provider keys into AgentGauge configuration.
+## Ingestion controls
 
-### Application secrets
+| Control | MVP behavior |
+|---------|--------------|
+| Auth | Bearer API key required on `/v1/*` |
+| Body size | 256 KiB |
+| Batch size | ≤ 100 events |
+| Metadata | key count, depth, string length, serialized size limits |
+| Tags | count + length limits |
+| Rate limit | In-process per API-key window (**not** multi-instance authoritative) |
+| Errors | No stack traces in responses |
 
-- Warn in docs: do not place passwords, tokens, or PII in `metadata` or `tags`.
-- Server-side validation may optionally reject known sensitive key names later; V1 relies primarily on documentation and defaults.
+## Privacy
 
----
+| Content | Behavior |
+|---------|----------|
+| Prompts / completions | Not collected |
+| Provider API keys | Not collected |
+| Tokens / model / latency / status | Collected |
+| Metadata / tags | User-supplied; size-limited |
 
-## Prompt & Completion Privacy
+## Known limitations
 
-| Content | Default V1 behavior |
-|---------|---------------------|
-| Prompts / inputs | **Not captured** |
-| Completions / outputs | **Not captured** |
-| Token counts | Captured |
-| Model / provider | Captured |
-| Latency / status / errors | Captured (errors sanitized) |
-| Custom metadata / tags | Captured as supplied by the user |
-
-If optional content capture is ever added:
-
-- It must be **opt-in**, explicit, documented, and versioned
-- It must carry clear UI/docs warnings about privacy and compliance
-- It is **out of MVP scope**
-
----
-
-## Metadata Privacy Implications
-
-`metadata` and `tags` are user-controlled extension fields.
-
-- Treat them as potentially sensitive
-- Document that customers are responsible for not embedding PII or secrets
-- Apply payload size limits to reduce accidental large dumps
-- Do not index or display metadata in ways that encourage pasting transcripts
-
----
-
-## Authentication & Authorization
-
-### Ingestion / API
-
-- Requests authenticated with AgentGauge API keys (see [API_DESIGN.md](./API_DESIGN.md))
-- Keys are scoped to an organization / project boundary (exact model finalized in Milestone 3)
-- Authorization must prevent cross-organization and cross-project data access
+- In-process rate limiting does not coordinate across multiple API replicas
+- TLS termination is an operator concern for hosted deployments
+- Dashboard session auth is out of scope until Milestone 4
 
 ### Dashboard
 

@@ -24,6 +24,14 @@ export type TransportConfig =
 
 /**
  * Configuration for the AgentGauge Node.js client.
+ *
+ * Precedence for cloud ingestion credentials:
+ * 1. Explicit `transport` (object or instance)
+ * 2. Constructor `apiKey` / `endpoint`
+ * 3. Environment variables `AGENTGAUGE_API_KEY` / `AGENTGAUGE_ENDPOINT`
+ *
+ * When `endpoint` is provided (constructor or env) without an explicit transport,
+ * AgentGauge uses HttpTransport targeting `{endpoint}/v1/traces`.
  */
 export interface AgentGaugeConfig {
   /**
@@ -31,13 +39,18 @@ export interface AgentGaugeConfig {
    * Never logged or included in telemetry payloads.
    */
   readonly apiKey?: string;
+  /**
+   * Base URL of the AgentGauge API (e.g. `http://localhost:3000` or `https://api.agentgauge.dev`).
+   * When set (and transport is omitted), configures HttpTransport to `POST {endpoint}/v1/traces`.
+   */
+  readonly endpoint?: string;
   /** Default project applied to traces when not overridden per trace. */
   readonly project?: string;
   /** Default environment applied to traces when not overridden per trace. */
   readonly environment?: string;
   /**
    * Transport used to deliver telemetry.
-   * Defaults to console transport when omitted.
+   * Defaults to console transport when omitted (unless endpoint/apiKey imply HTTP).
    */
   readonly transport?: TransportConfig;
   /**
@@ -47,37 +60,77 @@ export interface AgentGaugeConfig {
   readonly onTransportError?: TransportErrorHandler;
 }
 
+function trimOrUndefined(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const t = value.trim();
+  return t.length > 0 ? t : undefined;
+}
+
+function resolveIngestionUrl(base: string): string {
+  const normalized = base.replace(/\/+$/, "");
+  if (normalized.endsWith("/v1/traces") || normalized.endsWith("/v1/traces/batch")) {
+    return normalized;
+  }
+  return `${normalized}/v1/traces`;
+}
+
 function resolveTransport(config: AgentGaugeConfig): Transport {
   const transport = config.transport;
 
-  if (transport === undefined) {
-    return new ConsoleTransport();
-  }
-
-  if ("type" in transport) {
-    if (transport.type === "console") {
-      return new ConsoleTransport();
-    }
-    if (transport.type === "http") {
-      const apiKey = transport.apiKey ?? config.apiKey;
-      if (apiKey === undefined || apiKey.trim().length === 0) {
-        throw new ConfigurationError(
-          "apiKey is required when using HTTP transport (set AgentGaugeConfig.apiKey or transport.apiKey)",
-        );
+  if (transport !== undefined) {
+    if ("type" in transport) {
+      if (transport.type === "console") {
+        return new ConsoleTransport();
       }
-      return new HttpTransport({
-        endpoint: transport.endpoint,
-        apiKey,
-      });
+      if (transport.type === "http") {
+        const apiKey =
+          trimOrUndefined(transport.apiKey) ??
+          trimOrUndefined(config.apiKey) ??
+          trimOrUndefined(process.env.AGENTGAUGE_API_KEY);
+        if (apiKey === undefined) {
+          throw new ConfigurationError(
+            "apiKey is required when using HTTP transport (set AgentGaugeConfig.apiKey, transport.apiKey, or AGENTGAUGE_API_KEY)",
+          );
+        }
+        return new HttpTransport({
+          endpoint: transport.endpoint,
+          apiKey,
+        });
+      }
+      throw new ConfigurationError(
+        `Unknown transport type: ${(transport as { type: string }).type}`,
+      );
     }
-    throw new ConfigurationError(`Unknown transport type: ${(transport as { type: string }).type}`);
+
+    if (typeof transport.send !== "function") {
+      throw new ConfigurationError("transport must implement send(event)");
+    }
+
+    return transport;
   }
 
-  if (typeof transport.send !== "function") {
-    throw new ConfigurationError("transport must implement send(event)");
+  const apiKey = trimOrUndefined(config.apiKey) ?? trimOrUndefined(process.env.AGENTGAUGE_API_KEY);
+  const endpoint =
+    trimOrUndefined(config.endpoint) ?? trimOrUndefined(process.env.AGENTGAUGE_ENDPOINT);
+
+  if (endpoint !== undefined || apiKey !== undefined) {
+    if (apiKey === undefined) {
+      throw new ConfigurationError(
+        "apiKey is required when endpoint is set (set AgentGaugeConfig.apiKey or AGENTGAUGE_API_KEY)",
+      );
+    }
+    if (endpoint === undefined) {
+      throw new ConfigurationError(
+        "endpoint is required when apiKey is set without an explicit transport (set AgentGaugeConfig.endpoint or AGENTGAUGE_ENDPOINT)",
+      );
+    }
+    return new HttpTransport({
+      endpoint: resolveIngestionUrl(endpoint),
+      apiKey,
+    });
   }
 
-  return transport;
+  return new ConsoleTransport();
 }
 
 /**
@@ -101,6 +154,9 @@ export class AgentGauge implements TraceEmitter {
     }
     if (config.environment !== undefined && config.environment.trim().length === 0) {
       throw new ConfigurationError("environment must be a non-empty string when provided");
+    }
+    if (config.endpoint !== undefined && config.endpoint.trim().length === 0) {
+      throw new ConfigurationError("endpoint must be a non-empty string when provided");
     }
 
     this.project = config.project?.trim();
@@ -166,7 +222,7 @@ export class AgentGauge implements TraceEmitter {
           endedAt: new Date().toISOString(),
           latencyMs: 0,
           status: "error",
-          sdk: { name: "@agentgauge/node", version: "0.1.0" },
+          sdk: { name: "@agentgauge/node", version: "0.3.0" },
         });
       }
     }
@@ -184,8 +240,6 @@ export class AgentGauge implements TraceEmitter {
         await this.transport.shutdown();
       } catch {
         // Delivery/shutdown transport failures must not throw to callers by policy.
-        // shutdown() itself is an explicit SDK lifecycle call; we still swallow
-        // transport shutdown errors to keep lifecycle calls safe.
       }
     }
   }

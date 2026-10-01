@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Lightweight architecture-boundary check.
- * - @agentgauge/core must not import node / openai / apps
- * - @agentgauge/node must not import @agentgauge/openai
+ * Architecture-boundary check.
+ * - @agentgauge/core must not import node / openai / apps / db / fastify
+ * - @agentgauge/node must not import openai / apps / db / fastify
+ * - @agentgauge/openai must not import apps / db / fastify
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -10,6 +11,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const backendForbidden = [
+  { re: /from\s+["']@agentgauge\/db["']/, message: "must not import @agentgauge/db" },
+  { re: /from\s+["']@agentgauge\/api["']/, message: "must not import @agentgauge/api" },
+  { re: /from\s+["']fastify["']/, message: "must not import fastify" },
+  { re: /from\s+["']drizzle-orm/, message: "must not import drizzle-orm" },
+  { re: /from\s+["']postgres["']/, message: "must not import postgres" },
+  { re: /from\s+["'][^"']*apps\//, message: "must not import apps/*" },
+];
 
 const checks = [
   {
@@ -19,7 +29,7 @@ const checks = [
       { re: /from\s+["']@agentgauge\/openai["']/, message: "must not import @agentgauge/openai" },
       { re: /from\s+["']node:/, message: "must not import node: built-ins" },
       { re: /from\s+["']openai["']/, message: "must not import openai" },
-      { re: /from\s+["'][^"']*apps\//, message: "must not import apps/*" },
+      ...backendForbidden,
     ],
   },
   {
@@ -30,7 +40,12 @@ const checks = [
         message: "must not import @agentgauge/openai",
       },
       { re: /from\s+["']openai["']/, message: "must not import openai" },
+      ...backendForbidden,
     ],
+  },
+  {
+    dir: path.join(root, "packages/openai/src"),
+    forbidden: [...backendForbidden],
   },
 ];
 
@@ -70,4 +85,4 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log("Architecture boundary check passed (core + node).");
+console.log("Architecture boundary check passed (core + node + openai).");

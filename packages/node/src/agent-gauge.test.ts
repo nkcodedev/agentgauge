@@ -267,6 +267,28 @@ describe("HttpTransport", () => {
     await gauge.flush();
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
+
+  it("configures HttpTransport from endpoint + apiKey convenience options", async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      expect(String(url)).toBe("https://api.example.dev/v1/traces");
+      return new Response("{}", { status: 202 });
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    const gauge = new AgentGauge({
+      apiKey: "ag_test_example",
+      endpoint: "https://api.example.dev/",
+    });
+    gauge.startTrace({ agentId: "a" }).end();
+    await gauge.flush();
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
+  });
+
+  it("requires both apiKey and endpoint when using convenience cloud config", () => {
+    expect(() => new AgentGauge({ apiKey: "ag_test_x" })).toThrow(/endpoint/);
+    expect(() => new AgentGauge({ endpoint: "http://localhost:3000" })).toThrow(/apiKey/);
+  });
 });
 
 describe("shorthand console transport", () => {
