@@ -1,6 +1,6 @@
 # @agentgauge/node
 
-Node.js SDK for AgentGauge (`0.3.0`).
+Node.js SDK for AgentGauge (`0.4.0`).
 
 Supports manual tracing, console/custom/HTTP/`BatchedTransport`, and hosted API ingestion via `apiKey` + `endpoint`.
 
@@ -41,4 +41,4 @@ For OpenAI automatic instrumentation, install `@agentgauge/openai`.
 
 ## License
 
-Apache-2.0 — see [LICENSE](./LICENSE).
+Licensed under [Apache-2.0](https://github.com/nkcodedev/agentgauge/blob/main/LICENSE).

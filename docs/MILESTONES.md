@@ -143,11 +143,7 @@ Public MVP ≈ Milestone 4. Earlier milestones are incremental, releasable slice
 - Budgets and alerts (unless a thin stub is explicitly approved — default **no**)
 - Deep tool-call graph tracing
 
-### Exit criteria
-
-- New TypeScript developer can instrument OpenAI, send telemetry, and view usage/cost signals in the dashboard
-- README clearly states supported features vs roadmap
-- Milestone 1–4 docs aligned with reality
+**Status:** Complete for `0.4.0` (dashboard public MVP).
 
 ---
 

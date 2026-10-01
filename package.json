@@ -1,7 +1,7 @@
 {
   "name": "agentgauge",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "Observability and cost intelligence for AI agents",
   "packageManager": "pnpm@9.15.0",
@@ -20,10 +20,12 @@
     "db:migrate": "pnpm --filter @agentgauge/db migrate",
     "db:seed": "pnpm --filter @agentgauge/db seed",
     "dev:seed": "pnpm db:seed",
+    "dev:seed-demo": "pnpm --filter @agentgauge/api seed-demo",
     "dev:create-api-key": "pnpm --filter @agentgauge/api create-api-key",
     "dev:api": "pnpm --filter @agentgauge/api dev",
     "dev:worker": "pnpm --filter @agentgauge/worker dev",
-    "dev": "pnpm --filter @agentgauge/api --filter @agentgauge/worker --parallel dev",
+    "dev:dashboard": "pnpm --filter @agentgauge/dashboard dev",
+    "dev": "pnpm --filter @agentgauge/api --filter @agentgauge/worker --filter @agentgauge/dashboard --parallel dev",
     "changeset": "changeset",
     "version-packages": "changeset version"
   },

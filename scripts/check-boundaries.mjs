@@ -47,6 +47,15 @@ const checks = [
     dir: path.join(root, "packages/openai/src"),
     forbidden: [...backendForbidden],
   },
+  {
+    dir: path.join(root, "apps/dashboard/src"),
+    forbidden: [
+      { re: /from\s+["']@agentgauge\/db["']/, message: "dashboard must not import @agentgauge/db" },
+      { re: /from\s+["']drizzle-orm/, message: "dashboard must not import drizzle-orm" },
+      { re: /from\s+["']postgres["']/, message: "dashboard must not import postgres" },
+      { re: /from\s+["']fastify["']/, message: "dashboard must not import fastify" },
+    ],
+  },
 ];
 
 async function walk(dir) {
@@ -85,4 +94,4 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log("Architecture boundary check passed (core + node + openai).");
+console.log("Architecture boundary check passed (core + node + openai + dashboard).");

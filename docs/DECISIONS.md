@@ -462,6 +462,88 @@ Validate the entire `{ events }` batch first. Any malformed event → `400` and 
 
 ---
 
+## ADR-023: Dashboard uses Next.js App Router
+
+**Status:** Accepted
+
+### Context
+
+Milestone 4 needs a human-facing MVP UI with server components and a simple BFF.
+
+### Decision
+
+Implement `apps/dashboard` with **Next.js (App Router) + React + Tailwind CSS**. Charts use **recharts**.
+
+### Consequences
+
+- Fast local DX and SSR-friendly data loading
+- Dashboard is not published to npm
+
+---
+
+## ADR-024: Dashboard auth via server-side project API key proxy
+
+**Status:** Accepted
+
+### Context
+
+User login/OAuth is out of Milestone 4 scope, but the browser must not receive the project API key.
+
+### Decision
+
+Configure `AGENTGAUGE_API_KEY` / `AGENTGAUGE_API_URL` as **server-only** env vars. Dashboard server components call the API directly; browser mutations go through `/api/backend/v1/*` BFF routes that attach the key.
+
+### Consequences
+
+- Temporary auth model, documented as MVP
+- No API key in client JS bundles when used correctly
+
+---
+
+## ADR-025: API-key management HTTP API
+
+**Status:** Accepted
+
+### Context
+
+Dashboard settings need create/list/revoke without returning stored secrets.
+
+### Decision
+
+```text
+GET  /v1/api-keys
+POST /v1/api-keys          → 201 includes plaintext once
+POST /v1/api-keys/:id/revoke
+```
+
+List responses expose prefix/metadata only — never `key_hash` or full key.
+
+### Consequences
+
+- Matches seed/dev creation semantics
+- Revoked keys fail subsequent auth
+
+---
+
+## ADR-026: Usage time bucketing via interval query param
+
+**Status:** Accepted
+
+### Context
+
+Overview charts need requests/cost/tokens over time without many new endpoints.
+
+### Decision
+
+Extend `GET /v1/usage` with optional `interval=hour|day`, returning `series[]` plus `activeAgents`.
+
+### Consequences
+
+- Single query surface for KPIs + charts
+- Bucketing uses PostgreSQL `date_trunc`
+
+---
+
 ## ADR template (for future entries)
 
 ```markdown

@@ -14,4 +14,4 @@ npm install @agentgauge/core
 
 ## License
 
-Apache-2.0 — see [LICENSE](./LICENSE).
+Licensed under [Apache-2.0](https://github.com/nkcodedev/agentgauge/blob/main/LICENSE).

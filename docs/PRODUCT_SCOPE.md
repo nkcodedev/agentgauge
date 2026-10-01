@@ -1,6 +1,6 @@
 # AgentGauge Product Scope
 
-**Status:** Milestone 3 (`0.3.0`) — cloud telemetry + cost intelligence (no dashboard)
+**Status:** Milestone 4 (`0.4.0`) — Public MVP dashboard
 **Audience:** Maintainers, contributors, and early adopters evaluating the project
 
 This document defines what AgentGauge is, who it serves, what ships in the MVP, and what is explicitly deferred. Scope control is mandatory: features outside the current milestone must not be implemented early.
@@ -19,7 +19,7 @@ It helps teams answer:
 - Where do latency and errors concentrate?
 - How does usage vary by project and environment?
 
-Through `0.3.0`, AgentGauge ships a TypeScript SDK plus a self-hostable ingestion/query API with PostgreSQL-backed cost estimation. The dashboard UI arrives in Milestone 4.
+Through `0.4.0`, AgentGauge ships a TypeScript SDK, self-hostable ingestion/query API with PostgreSQL-backed cost estimation, and a Next.js web dashboard (MVP auth via server-side project API key).
 
 ---
 

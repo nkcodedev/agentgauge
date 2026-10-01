@@ -1,6 +1,6 @@
 # AgentGauge Security
 
-**Status:** Milestone 3 (`0.3.0`) controls implemented for local/self-hosted API
+**Status:** Milestone 4 (`0.4.0`) — dashboard MVP + API-key management
 **Related:** [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md), [API_DESIGN.md](./API_DESIGN.md), [DECISIONS.md](./DECISIONS.md)
 
 AgentGauge collects **operational telemetry**, not secrets and not conversational content by default.

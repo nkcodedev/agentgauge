@@ -17,9 +17,20 @@ export interface UsageBreakdownRow {
   readonly averageLatencyMs: number;
 }
 
+export type UsageInterval = "hour" | "day";
+
+export interface UsageSeriesPoint {
+  readonly bucket: string;
+  readonly requests: number;
+  readonly totalTokens: number;
+  readonly estimatedCost: number;
+  readonly errors: number;
+}
+
 export interface UsageResponse {
   readonly from: string | null;
   readonly to: string | null;
+  readonly interval: UsageInterval | null;
   readonly requests: number;
   readonly inputTokens: number;
   readonly outputTokens: number;
@@ -27,9 +38,11 @@ export interface UsageResponse {
   readonly estimatedCost: number;
   readonly errors: number;
   readonly averageLatencyMs: number;
+  readonly activeAgents: number;
   readonly byAgent: UsageBreakdownRow[];
   readonly byModel: UsageBreakdownRow[];
   readonly byProvider: UsageBreakdownRow[];
+  readonly series: UsageSeriesPoint[];
 }
 
 function rangeFilters(projectId: string, range: DateRange): SQL[] {
@@ -49,6 +62,7 @@ export async function getUsage(
   db: Database,
   projectId: string,
   range: DateRange,
+  interval?: UsageInterval,
 ): Promise<UsageResponse> {
   const where = and(...rangeFilters(projectId, range));
 
@@ -61,11 +75,40 @@ export async function getUsage(
       estimatedCost: sql<number>`coalesce(sum(${traces.totalCost}), 0)`,
       errors: sql<number>`count(*) filter (where ${traces.status} = 'error')::int`,
       averageLatencyMs: sql<number>`coalesce(avg(${traces.latencyMs}), 0)`,
+      activeAgents: sql<number>`count(distinct ${traces.agentId})::int`,
     })
     .from(traces)
     .where(where);
 
   const t = totals[0]!;
+
+  let series: UsageSeriesPoint[] = [];
+  if (interval) {
+    const bucketExpr =
+      interval === "hour"
+        ? sql`date_trunc('hour', ${traces.startedAt})`
+        : sql`date_trunc('day', ${traces.startedAt})`;
+    const seriesRows = await db
+      .select({
+        bucket: bucketExpr,
+        requests: sql<number>`count(*)::int`,
+        totalTokens: sql<number>`coalesce(sum(${traces.totalTokens}), 0)::bigint`,
+        estimatedCost: sql<number>`coalesce(sum(${traces.totalCost}), 0)`,
+        errors: sql<number>`count(*) filter (where ${traces.status} = 'error')::int`,
+      })
+      .from(traces)
+      .where(where)
+      .groupBy(bucketExpr)
+      .orderBy(bucketExpr);
+
+    series = seriesRows.map((r) => ({
+      bucket: new Date(r.bucket as unknown as string | Date).toISOString(),
+      requests: num(r.requests),
+      totalTokens: num(r.totalTokens),
+      estimatedCost: num(r.estimatedCost),
+      errors: num(r.errors),
+    }));
+  }
 
   const byAgentRows = await db
     .select({
@@ -139,6 +182,7 @@ export async function getUsage(
   return {
     from: range.from?.toISOString() ?? null,
     to: range.to?.toISOString() ?? null,
+    interval: interval ?? null,
     requests: num(t.requests),
     inputTokens: num(t.inputTokens),
     outputTokens: num(t.outputTokens),
@@ -146,9 +190,11 @@ export async function getUsage(
     estimatedCost: num(t.estimatedCost),
     errors: num(t.errors),
     averageLatencyMs: Math.round(num(t.averageLatencyMs)),
+    activeAgents: num(t.activeAgents),
     byAgent: byAgentRows.map(mapRow),
     byModel: byModelRows.map(mapRow),
     byProvider: byProviderRows.map(mapRow),
+    series,
   };
 }
 
@@ -217,6 +263,7 @@ export interface TraceListItem {
   readonly agentId: string;
   readonly provider: string | null;
   readonly model: string | null;
+  readonly operationName: string | null;
   readonly status: string;
   readonly startedAt: string;
   readonly endedAt: string;
@@ -226,6 +273,20 @@ export interface TraceListItem {
   readonly totalTokens: number | null;
   readonly totalCost: string | null;
   readonly currency: string | null;
+  readonly costStatus: string;
+}
+
+export interface TraceDetail extends TraceListItem {
+  readonly environment: string | null;
+  readonly errorName: string | null;
+  readonly errorMessage: string | null;
+  readonly errorCode: string | null;
+  readonly metadata: Record<string, unknown> | null;
+  readonly tags: string[] | null;
+  readonly sdkName: string;
+  readonly sdkVersion: string;
+  readonly inputCost: string | null;
+  readonly outputCost: string | null;
 }
 
 export interface TraceListResponse {
@@ -268,6 +329,7 @@ export async function listTraces(
       agentKey: agents.agentKey,
       provider: traces.provider,
       model: traces.model,
+      operationName: traces.operationName,
       status: traces.status,
       startedAt: traces.startedAt,
       endedAt: traces.endedAt,
@@ -277,6 +339,7 @@ export async function listTraces(
       totalTokens: traces.totalTokens,
       totalCost: traces.totalCost,
       currency: traces.currency,
+      costStatus: traces.costStatus,
     })
     .from(traces)
     .innerJoin(agents, eq(agents.id, traces.agentId))
@@ -295,6 +358,7 @@ export async function listTraces(
       agentId: r.agentKey,
       provider: r.provider,
       model: r.model,
+      operationName: r.operationName,
       status: r.status,
       startedAt: r.startedAt.toISOString(),
       endedAt: r.endedAt.toISOString(),
@@ -304,7 +368,79 @@ export async function listTraces(
       totalTokens: r.totalTokens,
       totalCost: r.totalCost !== null ? String(r.totalCost) : null,
       currency: r.currency,
+      costStatus: r.costStatus,
     })),
     nextCursor: hasMore && last ? last.startedAt.toISOString() : null,
+  };
+}
+
+export async function getTrace(
+  db: Database,
+  projectId: string,
+  eventId: string,
+): Promise<TraceDetail | null> {
+  const rows = await db
+    .select({
+      eventId: traces.eventId,
+      traceId: traces.traceId,
+      agentKey: agents.agentKey,
+      provider: traces.provider,
+      model: traces.model,
+      operationName: traces.operationName,
+      environment: traces.environment,
+      status: traces.status,
+      startedAt: traces.startedAt,
+      endedAt: traces.endedAt,
+      latencyMs: traces.latencyMs,
+      inputTokens: traces.inputTokens,
+      outputTokens: traces.outputTokens,
+      totalTokens: traces.totalTokens,
+      errorName: traces.errorName,
+      errorMessage: traces.errorMessage,
+      errorCode: traces.errorCode,
+      metadata: traces.metadata,
+      tags: traces.tags,
+      sdkName: traces.sdkName,
+      sdkVersion: traces.sdkVersion,
+      inputCost: traces.inputCost,
+      outputCost: traces.outputCost,
+      totalCost: traces.totalCost,
+      currency: traces.currency,
+      costStatus: traces.costStatus,
+    })
+    .from(traces)
+    .innerJoin(agents, eq(agents.id, traces.agentId))
+    .where(and(eq(traces.projectId, projectId), eq(traces.eventId, eventId)))
+    .limit(1);
+
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    eventId: r.eventId,
+    traceId: r.traceId,
+    agentId: r.agentKey,
+    provider: r.provider,
+    model: r.model,
+    operationName: r.operationName,
+    environment: r.environment,
+    status: r.status,
+    startedAt: r.startedAt.toISOString(),
+    endedAt: r.endedAt.toISOString(),
+    latencyMs: r.latencyMs,
+    inputTokens: r.inputTokens,
+    outputTokens: r.outputTokens,
+    totalTokens: r.totalTokens,
+    errorName: r.errorName,
+    errorMessage: r.errorMessage,
+    errorCode: r.errorCode,
+    metadata: r.metadata,
+    tags: r.tags,
+    sdkName: r.sdkName,
+    sdkVersion: r.sdkVersion,
+    inputCost: r.inputCost !== null ? String(r.inputCost) : null,
+    outputCost: r.outputCost !== null ? String(r.outputCost) : null,
+    totalCost: r.totalCost !== null ? String(r.totalCost) : null,
+    currency: r.currency,
+    costStatus: r.costStatus,
   };
 }

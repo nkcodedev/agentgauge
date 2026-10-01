@@ -4,7 +4,15 @@ import { createDb, type Database } from "@agentgauge/db";
 import { authenticateRequest, type AuthContext } from "./services/auth.js";
 import { IngestBodySchema } from "./lib/trace-schema.js";
 import { ingestEvent, ProjectMismatchError } from "./services/ingest.js";
-import { getAgent, getUsage, listAgents, listTraces } from "./services/query.js";
+import {
+  getAgent,
+  getTrace,
+  getUsage,
+  listAgents,
+  listTraces,
+  type UsageInterval,
+} from "./services/query.js";
+import { createApiKey, listApiKeys, revokeApiKey } from "./services/api-keys.js";
 import { InMemoryRateLimiter } from "./lib/rate-limit.js";
 import { openApiDocument } from "./openapi.js";
 
@@ -146,7 +154,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get("/v1/usage", async (request, reply) => {
     const auth = request.auth!;
-    const query = request.query as { from?: string; to?: string };
+    const query = request.query as { from?: string; to?: string; interval?: string };
     let from: Date | undefined;
     let to: Date | undefined;
     try {
@@ -160,10 +168,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         },
       });
     }
-    const usage = await getUsage(db, auth.project.id, {
-      ...(from ? { from } : {}),
-      ...(to ? { to } : {}),
-    });
+    let interval: UsageInterval | undefined;
+    if (query.interval !== undefined) {
+      if (query.interval !== "hour" && query.interval !== "day") {
+        return reply.code(400).send({
+          error: { code: "bad_request", message: "interval must be hour or day" },
+        });
+      }
+      interval = query.interval;
+    }
+    const usage = await getUsage(
+      db,
+      auth.project.id,
+      {
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+      },
+      interval,
+    );
     return reply.send(usage);
   });
 
@@ -221,6 +243,73 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       ...(query.cursor ? { cursor: query.cursor } : {}),
     });
     return reply.send(result);
+  });
+
+  app.get("/v1/traces/:eventId", async (request, reply) => {
+    const auth = request.auth!;
+    const { eventId } = request.params as { eventId: string };
+    const trace = await getTrace(db, auth.project.id, eventId);
+    if (!trace) {
+      return reply.code(404).send({
+        error: { code: "not_found", message: "Trace not found" },
+      });
+    }
+    return reply.send(trace);
+  });
+
+  app.get("/v1/api-keys", async (request, reply) => {
+    const auth = request.auth!;
+    const data = await listApiKeys(db, auth.project.id);
+    return reply.send({ data });
+  });
+
+  app.post("/v1/api-keys", async (request, reply) => {
+    const auth = request.auth!;
+    const body = (request.body ?? {}) as { name?: string; environment?: "live" | "test" };
+    if (typeof body.name !== "string") {
+      return reply.code(400).send({
+        error: { code: "validation_error", message: "name is required" },
+      });
+    }
+    if (
+      body.environment !== undefined &&
+      body.environment !== "live" &&
+      body.environment !== "test"
+    ) {
+      return reply.code(400).send({
+        error: { code: "validation_error", message: "environment must be live or test" },
+      });
+    }
+    try {
+      const created = await createApiKey(db, auth.organization.id, auth.project.id, {
+        name: body.name,
+        ...(body.environment ? { environment: body.environment } : {}),
+      });
+      return reply.code(201).send(created);
+    } catch (error) {
+      const status =
+        error instanceof Error && "statusCode" in error
+          ? Number((error as { statusCode: number }).statusCode)
+          : 500;
+      return reply.code(status).send({
+        error: {
+          code: status === 400 ? "validation_error" : "internal",
+          message: error instanceof Error ? error.message : "Failed to create key",
+        },
+      });
+    }
+  });
+
+  app.post("/v1/api-keys/:id/revoke", async (request, reply) => {
+    const auth = request.auth!;
+    const { id } = request.params as { id: string };
+    const revoked = await revokeApiKey(db, auth.project.id, id);
+    if (!revoked) {
+      return reply.code(404).send({
+        error: { code: "not_found", message: "API key not found" },
+      });
+    }
+    return reply.send(revoked);
   });
 
   return app;

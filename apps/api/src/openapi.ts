@@ -2,9 +2,8 @@ export const openApiDocument = {
   openapi: "3.0.3",
   info: {
     title: "AgentGauge API",
-    version: "0.3.0",
-    description:
-      "Telemetry ingestion and usage query API for AgentGauge. Dashboard UI is not part of 0.3.0.",
+    version: "0.4.0",
+    description: "Telemetry ingestion, usage query, and API-key management for AgentGauge.",
   },
   servers: [{ url: "http://localhost:3000" }],
   components: {

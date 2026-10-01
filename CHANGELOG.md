@@ -2,6 +2,23 @@
 
 All notable changes to AgentGauge packages are documented here.
 
+## 0.4.0
+
+### Added
+
+- `apps/dashboard` — Next.js App Router dashboard (overview, agents, traces, API keys)
+- API-key management endpoints: `GET/POST /v1/api-keys`, `POST /v1/api-keys/:id/revoke`
+- `GET /v1/traces/:eventId` trace detail
+- `GET /v1/usage?interval=hour|day` time-series + `activeAgents`
+- Server-side dashboard BFF proxy (API key never exposed to browser JS)
+- Dashboard Vitest component/unit tests + optional Playwright smoke
+
+### Notes
+
+- Dashboard auth is MVP: server-side project API key via `AGENTGAUGE_API_KEY`
+- Unknown model costs render as **Cost unavailable**, never `$0`
+- Charting uses **recharts**
+
 ## 0.3.0
 
 ### Added
@@ -18,7 +35,7 @@ All notable changes to AgentGauge packages are documented here.
 
 ### Notes
 
-- Dashboard UI is **not** included in `0.3.0`
+- Dashboard UI was **not** included in `0.3.0`
 - Unknown models store tokens with `null` cost (never fabricated)
 - In-process rate limiting is single-instance only
 - Batch ingestion validates all-or-nothing; duplicate `eventId`s are idempotent

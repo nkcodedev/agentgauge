@@ -222,7 +222,7 @@ export class AgentGauge implements TraceEmitter {
           endedAt: new Date().toISOString(),
           latencyMs: 0,
           status: "error",
-          sdk: { name: "@agentgauge/node", version: "0.3.0" },
+          sdk: { name: "@agentgauge/node", version: "0.4.0" },
         });
       }
     }

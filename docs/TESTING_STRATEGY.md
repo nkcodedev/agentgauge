@@ -22,6 +22,18 @@ Do not mock away PostgreSQL for these suites. Do not call live OpenAI.
 
 ---
 
+## Milestone 4 dashboard tests
+
+| Layer | Location |
+|-------|----------|
+| Unit/component | `apps/dashboard/src/**/*.test.ts(x)` |
+| API key management | `apps/api/src/api-keys.integration.test.ts` |
+| Playwright (optional) | `apps/dashboard/e2e` via `pnpm --filter @agentgauge/dashboard test:e2e` |
+
+Playwright requires browsers installed and running API+dashboard. If browsers are unavailable, report transparently — do not claim E2E passed.
+
+---
+
 ## Principles
 
 1. **Deterministic** — Same inputs produce the same results; no flaky time/network dependence without fakes.
