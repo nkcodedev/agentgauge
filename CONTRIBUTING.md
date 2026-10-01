@@ -2,21 +2,19 @@
 
 Thank you for contributing. AgentGauge is an early-stage open-source project; **scope discipline** matters as much as code quality.
 
-**Related:** [CODING_STANDARDS.md](./CODING_STANDARDS.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [TESTING_STRATEGY.md](./TESTING_STRATEGY.md), [MILESTONES.md](./MILESTONES.md)
+**Related:** [ARCHITECTURE.md](./docs/ARCHITECTURE.md), [SECURITY.md](./SECURITY.md), [API.md](./docs/API.md), [TELEMETRY.md](./docs/TELEMETRY.md)
 
 ---
 
 ## Before You Start
 
-1. Read [PRODUCT_SCOPE.md](./PRODUCT_SCOPE.md) and [MILESTONES.md](./MILESTONES.md)
-2. Confirm your change fits the **current** milestone
-3. For architectural changes, propose an entry in [DECISIONS.md](./DECISIONS.md)
+1. Confirm your change fits current public product behavior (see [README.md](./README.md) and [CHANGELOG.md](./CHANGELOG.md))
+2. Prefer small, focused PRs over large speculative refactors
+3. Discuss architectural changes in a GitHub issue before large redesigns
 
 ---
 
-## Install (Target Workflow)
-
-Exact scripts:
+## Install
 
 ```bash
 pnpm install
@@ -34,21 +32,19 @@ Do not introduce npm/yarn lockfiles. pnpm is mandatory.
 
 ## Branch Conventions
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Stable development line |
-| `feat/<short-name>` | Features |
-| `fix/<short-name>` | Bug fixes |
-| `docs/<short-name>` | Documentation |
-| `chore/<short-name>` | Tooling / maintenance |
+| Branch               | Purpose                 |
+| -------------------- | ----------------------- |
+| `main`               | Stable development line |
+| `feat/<short-name>`  | Features                |
+| `fix/<short-name>`   | Bug fixes               |
+| `docs/<short-name>`  | Documentation           |
+| `chore/<short-name>` | Tooling / maintenance   |
 
 Keep branches short-lived and focused.
 
 ---
 
-## Development Commands (Target)
-
-Once the monorepo exists, expect commands similar to:
+## Development Commands
 
 ```bash
 pnpm build
@@ -58,29 +54,28 @@ pnpm format
 pnpm typecheck
 ```
 
-Package-scoped filters (illustrative):
+Package-scoped filters:
 
 ```bash
 pnpm --filter @agentgauge/core test
 pnpm --filter @agentgauge/node test
 ```
 
-Use the repo scripts as source of truth when they exist.
-
 ---
 
 ## Testing
 
-- Add tests for behavioral changes ([TESTING_STRATEGY.md](./TESTING_STRATEGY.md))
+- Add tests for behavioral changes
 - Do not call real paid LLM APIs in tests
 - Include failure paths for transport, validation, and adapter mapping when relevant
 - Run the affected suite before opening a PR
+- Integration, database, and dashboard E2E tests expect a reachable PostgreSQL instance (see `docker-compose.yml`)
 
 ---
 
 ## Linting & Formatting
 
-- Follow the repo ESLint/Prettier (or equivalent) config once present
+- Follow the repo ESLint/Prettier config
 - Do not disable rules broadly to land a PR
 - Format generated diffs so reviews stay readable
 
@@ -89,17 +84,16 @@ Use the repo scripts as source of truth when they exist.
 ## Build
 
 - All affected packages must typecheck and build
-- Do not commit build artifacts unless the project explicitly decides to
+- Do not commit build artifacts
 
 ---
 
-## Versioning / Changesets
+## Versioning
 
 Early development uses **synchronized fixed versions** across `@agentgauge/*` packages.
 
 - Prefer Changesets (`pnpm changeset`) — packages are fixed/synchronized via `.changeset/config.json`
 - Do not manually publish from a fork without maintainer approval
-- See [VERSIONING_AND_RELEASES.md](./VERSIONING_AND_RELEASES.md)
 
 ---
 
@@ -107,7 +101,7 @@ Early development uses **synchronized fixed versions** across `@agentgauge/*` pa
 
 PRs should:
 
-1. State the milestone and motivation
+1. State motivation clearly
 2. Stay narrowly scoped
 3. Include tests for code changes
 4. Update docs when public behavior changes
@@ -117,13 +111,12 @@ PRs should:
 PR description template (suggested):
 
 ```markdown
-## Milestone
-e.g. Milestone 1
-
 ## Summary
+
 What and why
 
 ## Test plan
+
 - [ ] unit/integration steps
 ```
 
@@ -141,7 +134,7 @@ What and why
 
 - Public APIs, env vars, and HTTP endpoints must be documented
 - Do not claim unimplemented features in README
-- Update [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md) / [API_DESIGN.md](./API_DESIGN.md) when contracts change
+- Update [docs/TELEMETRY.md](./docs/TELEMETRY.md) / [docs/API.md](./docs/API.md) when contracts change
 
 ---
 
@@ -155,6 +148,8 @@ Reviewers will reject changes that:
 - Make telemetry failures fail customer LLM calls by default
 - Capture prompts/completions by default
 
+Enforced by `scripts/check-boundaries.mjs`.
+
 ---
 
 ## Security
@@ -165,10 +160,10 @@ Follow [SECURITY.md](./SECURITY.md). Never paste real API keys into issues, PRs,
 
 ## Code of Conduct
 
-Be respectful and constructive. Maintainers may decline out-of-scope contributions politely and redirect them to a future milestone.
+Be respectful and constructive. Maintainers may decline out-of-scope contributions politely.
 
 ---
 
 ## License
 
-AgentGauge is licensed under the [Apache License 2.0](../LICENSE). Contributions are offered under the same license.
+AgentGauge is licensed under the [Apache License 2.0](./LICENSE). Contributions are offered under the same license.

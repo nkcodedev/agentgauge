@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LiveIndicator } from "@/components/live-indicator";
 
 const links = [
   { href: "/overview", label: "Overview" },
@@ -18,8 +19,9 @@ export function Sidebar() {
       <div className="mb-8">
         <Link href="/overview" className="text-ink-950 no-underline">
           <div className="text-lg font-semibold tracking-tight">AgentGauge</div>
-          <div className="mt-1 text-xs text-ink-500">Public MVP</div>
+          <div className="mt-1 text-xs text-ink-500">Real-time MVP</div>
         </Link>
+        <LiveIndicator />
       </div>
       <nav className="flex flex-col gap-1" aria-label="Primary">
         {links.map((link) => {
@@ -41,7 +43,8 @@ export function Sidebar() {
       </nav>
       <div className="mt-10 rounded-md border border-ink-200 bg-ink-50 p-3 text-xs text-ink-600">
         Auth model: server-side project API key via{" "}
-        <code className="font-mono">AGENTGAUGE_API_KEY</code>. Temporary for MVP.
+        <code className="font-mono">AGENTGAUGE_API_KEY</code>. Temporary for MVP. Live updates use
+        SSE through a server-side proxy.
       </div>
     </aside>
   );

@@ -1,7 +1,7 @@
-# AgentGauge API Design
+# AgentGauge API
 
-**Status:** Implemented through Milestone 4 (`0.4.0`)
-**Related:** [TELEMETRY_SPEC.md](./TELEMETRY_SPEC.md), [SECURITY.md](./SECURITY.md), [ARCHITECTURE.md](./ARCHITECTURE.md)
+**Status:** Implemented through Milestone 4.1 (`0.5.0`)
+**Related:** [TELEMETRY.md](./TELEMETRY.md), [SECURITY.md](../SECURITY.md), [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 Machine-readable sketch: `GET /openapi.json`.
 
@@ -13,7 +13,7 @@ Machine-readable sketch: `GET /openapi.json`.
 Authorization: Bearer ag_live_<secret>
 ```
 
-Project API key authorizes ingestion, query, and API-key management (MVP).
+Project API key authorizes ingestion, query, API-key management, and SSE streams (MVP).
 
 ---
 
@@ -21,8 +21,9 @@ Project API key authorizes ingestion, query, and API-key management (MVP).
 
 | Method | Path | Notes |
 |--------|------|-------|
-| POST | `/v1/traces` | Batch ingest `{ events }` → **202** |
+| POST | `/v1/traces` | Batch ingest `{ events }` → **202**; emits `trace.created` for new rows |
 | POST | `/v1/traces/batch` | Alias |
+| GET | `/v1/events/stream` | Project-scoped SSE (`text/event-stream`) |
 | GET | `/v1/usage` | Aggregates; optional `interval=hour\|day` → `series`, `activeAgents` |
 | GET | `/v1/agents` | Agent summaries |
 | GET | `/v1/agents/:agentId` | One agent |
@@ -37,7 +38,22 @@ Project API key authorizes ingestion, query, and API-key management (MVP).
 ### Ingestion notes
 
 - Max 100 events / batch; validate all-or-nothing
-- Duplicate `eventId` → idempotent 202
+- Duplicate `eventId` → idempotent 202 **without** a second SSE notification
+- `trace.created` is emitted only after successful insert + cost enrichment
+
+### Live events (SSE)
+
+```text
+event: ready
+data: {"projectId":"...","occurredAt":"..."}
+
+event: trace.created
+data: {"type":"trace.created","projectId":"...","agentId":"...","eventId":"...","occurredAt":"..."}
+
+: heartbeat
+```
+
+Heartbeat comments (~20s) do not trigger dashboard refetches. Fan-out is in-memory / single API process.
 - API key project is authoritative (`project_mismatch` on conflict)
 
 ### Usage notes
@@ -56,4 +72,9 @@ Project API key authorizes ingestion, query, and API-key management (MVP).
 
 ## Dashboard BFF
 
-Browser calls `/api/backend/v1/*` on the dashboard. The Next.js route attaches server-only `AGENTGAUGE_API_KEY`.
+Browser calls:
+
+- `/api/backend/v1/*` — JSON proxy for mutations (e.g. API keys)
+- `/api/events` — SSE proxy for live updates
+
+Both attach server-only `AGENTGAUGE_API_KEY`. The browser never receives the project key.

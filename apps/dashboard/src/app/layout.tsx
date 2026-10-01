@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "@/components/sidebar";
+import { LiveEventsProvider } from "@/components/live-events";
 import "./globals.css";
 
 export const metadata = {
   title: "AgentGauge",
-  description: "Observability and cost intelligence for AI agents",
+  description: "Real-time observability and cost intelligence for AI agents",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -19,10 +20,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body>
-        <div className="mx-auto flex min-h-screen max-w-[1400px]">
-          <Sidebar />
-          <main className="min-w-0 flex-1 px-4 py-6 sm:px-8">{children}</main>
-        </div>
+        <LiveEventsProvider>
+          <div className="mx-auto flex min-h-screen max-w-[1400px]">
+            <Sidebar />
+            <main className="min-w-0 flex-1 px-4 py-6 sm:px-8">{children}</main>
+          </div>
+        </LiveEventsProvider>
       </body>
     </html>
   );

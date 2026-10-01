@@ -1,7 +1,7 @@
 # AgentGauge Architecture
 
-**Status:** Milestone 4 (`0.4.0`) — SDK + API + worker + PostgreSQL + dashboard
-**Related:** [PRODUCT_SCOPE.md](./PRODUCT_SCOPE.md), [DECISIONS.md](./DECISIONS.md)
+**Status:** Milestone 4.1 (`0.5.0`) — SDK + API + worker + PostgreSQL + real-time dashboard
+**Related:** [API.md](./API.md), [SELF_HOSTING.md](./SELF_HOSTING.md), [SECURITY.md](../SECURITY.md)
 
 ---
 
@@ -12,7 +12,7 @@ agentgauge/
 ├── apps/
 │   ├── api/
 │   ├── worker/
-│   └── dashboard/     # Next.js App Router + Tailwind
+│   └── dashboard/     # Next.js App Router + Tailwind + SSE live updates
 ├── packages/
 │   ├── core/
 │   ├── node/
@@ -28,10 +28,12 @@ agentgauge/
 ## Data flow
 
 ```text
-SDK → AgentGauge API → PostgreSQL → Cost Engine → Dashboard
+SDK → AgentGauge API → PostgreSQL → Cost Engine → ProjectEventBus → SSE → Dashboard
 ```
 
-Dashboard consumes HTTP APIs only (never imports `@agentgauge/db`).
+Dashboard consumes HTTP APIs only (never imports `@agentgauge/db`). Live updates use lightweight SSE notifications; PostgreSQL query APIs remain the source of truth.
+
+**Limitation:** the in-memory event bus fans out only within a single API process.
 
 ---
 
@@ -55,6 +57,7 @@ Enforced by `scripts/check-boundaries.mjs`.
 
 ## Related
 
-- [API_DESIGN.md](./API_DESIGN.md)
-- [SECURITY.md](./SECURITY.md)
-- [MILESTONES.md](./MILESTONES.md)
+- [API.md](./API.md)
+- [SELF_HOSTING.md](./SELF_HOSTING.md)
+- [SECURITY.md](../SECURITY.md)
+- [TELEMETRY.md](./TELEMETRY.md)

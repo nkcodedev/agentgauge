@@ -2,7 +2,7 @@
 
 **Status:** Implemented through `@agentgauge/openai` `0.2.0` for OpenAI adapters; schema remains provider-neutral
 **Version:** Telemetry schema V1
-**Related:** [ARCHITECTURE.md](./ARCHITECTURE.md), [SECURITY.md](./SECURITY.md), [API_DESIGN.md](./API_DESIGN.md)
+**Related:** [ARCHITECTURE.md](./ARCHITECTURE.md), [SECURITY.md](../SECURITY.md), [API.md](./API.md)
 
 This document defines the **`TraceEvent`** contract. V1 is intentionally simple and extensible.
 
@@ -90,7 +90,7 @@ interface TraceEvent {
 
 ### Cost fields
 
-Estimated cost is **not** a client-populated field in V1. Authoritative estimates belong on the server ([ADR-004](./DECISIONS.md#adr-004-cost-calculation-belongs-primarily-on-the-server)).
+Estimated cost is **not** a client-populated field in V1. Authoritative estimates belong on the server.
 
 ---
 

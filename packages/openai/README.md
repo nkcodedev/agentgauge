@@ -2,22 +2,24 @@
 
 OpenAI automatic instrumentation for AgentGauge.
 
-**v0.2.0 supports (non-streaming):**
-
-- `client.responses.create(...)`
-- `client.chat.completions.create(...)`
-
-**Not supported yet:** streaming (`stream: true` is passed through without telemetry), embeddings, images, audio, assistants, realtime, batches.
-
-Telemetry is metadata-first: prompts, messages, and completions are never captured automatically.
-
 ## Install
 
 ```bash
 npm install @agentgauge/node @agentgauge/openai openai
 ```
 
-Peer dependency: `openai` `^4 || ^5 || ^6`.
+Peer dependency: `openai` `^4 || ^5 || ^6`. Requires **Node.js >= 20**.
+
+## Supported (non-streaming)
+
+- `client.responses.create(...)`
+- `client.chat.completions.create(...)`
+
+Streaming (`stream: true`) is returned unmodified **without** AgentGauge telemetry.
+
+Not instrumented yet: embeddings, images, audio, assistants, realtime, batches.
+
+Telemetry is metadata-first: prompts, messages, and completions are never captured automatically.
 
 ## Quick start
 
@@ -27,7 +29,8 @@ import { AgentGauge } from "@agentgauge/node";
 import { observeOpenAI } from "@agentgauge/openai";
 
 const gauge = new AgentGauge({
-  transport: { type: "console" },
+  apiKey: process.env.AGENTGAUGE_API_KEY,
+  endpoint: process.env.AGENTGAUGE_ENDPOINT,
 });
 
 const openai = observeOpenAI(new OpenAI(), {
@@ -35,11 +38,13 @@ const openai = observeOpenAI(new OpenAI(), {
   agentId: "support-agent",
 });
 
-const response = await openai.responses.create({
-  model: "gpt-4.1-mini",
-  input: "Explain circuit breakers simply.",
+await openai.responses.create({
+  model: "gpt-4o-mini",
+  input: "Hello",
 });
 ```
+
+`OPENAI_API_KEY` authenticates with OpenAI. `AGENTGAUGE_API_KEY` authenticates telemetry with AgentGauge.
 
 ## License
 

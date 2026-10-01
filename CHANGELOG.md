@@ -2,6 +2,25 @@
 
 All notable changes to AgentGauge packages are documented here.
 
+## 0.5.0
+
+### Added
+
+- Real-time dashboard updates via Server-Sent Events (`GET /v1/events/stream`)
+- Project-scoped live events after completed telemetry is persisted and cost-enriched
+- Dashboard `/api/events` BFF SSE proxy so the project API key never reaches browser JS
+- Live / Reconnecting / Offline connection status indicator
+- Automatic SSE reconnect with ~500 ms event coalescing (burst-friendly refresh)
+- Overview, Agents, and Traces pages refresh automatically — no manual browser reload
+- In-memory `ProjectEventBus` for single-API-process fan-out
+- Public documentation polish: root `CONTRIBUTING.md` / `SECURITY.md`, `docs/API.md`, `docs/SELF_HOSTING.md`, `docs/TELEMETRY.md`
+
+### Notes
+
+- “Real-time” means: completed AgentGauge telemetry → SSE notification → dashboard refresh (not provider token-by-token streaming)
+- Multi-replica / distributed SSE fan-out is **not** included — the current `ProjectEventBus` is process-local and supports one API process
+- Anthropic/Gemini instrumentation, budgets, and alerts are not part of this release
+
 ## 0.4.0
 
 ### Added

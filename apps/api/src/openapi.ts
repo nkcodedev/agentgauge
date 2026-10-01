@@ -2,8 +2,9 @@ export const openApiDocument = {
   openapi: "3.0.3",
   info: {
     title: "AgentGauge API",
-    version: "0.4.0",
-    description: "Telemetry ingestion, usage query, and API-key management for AgentGauge.",
+    version: "0.5.0",
+    description:
+      "Telemetry ingestion, usage query, API-key management, and live SSE updates for AgentGauge.",
   },
   servers: [{ url: "http://localhost:3000" }],
   components: {
@@ -28,7 +29,7 @@ export const openApiDocument = {
       post: {
         summary: "Ingest one or more TraceEvent records",
         description:
-          "Body: { events: TraceEvent[] } (max 100). Validates the entire batch first; if any event is malformed, rejects the whole batch (400). Duplicate eventIds are idempotent (202).",
+          "Body: { events: TraceEvent[] } (max 100). Validates the entire batch first; if any event is malformed, rejects the whole batch (400). Duplicate eventIds are idempotent (202). Newly persisted traces emit project-scoped SSE `trace.created` events.",
         responses: {
           "202": { description: "Accepted (including idempotent duplicates)" },
           "400": { description: "Validation error" },
@@ -56,6 +57,17 @@ export const openApiDocument = {
         summary: "Alias for POST /v1/traces",
         responses: {
           "202": { description: "Accepted" },
+        },
+      },
+    },
+    "/v1/events/stream": {
+      get: {
+        summary: "Project-scoped Server-Sent Events stream",
+        description:
+          "Long-lived SSE connection. Emits `ready` then `trace.created` for newly persisted traces. Heartbeat comments every ~20s. Does not include prompts/completions or API keys. In-memory fan-out is single-process only.",
+        responses: {
+          "200": { description: "text/event-stream" },
+          "401": { description: "Unauthorized" },
         },
       },
     },

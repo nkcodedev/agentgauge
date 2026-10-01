@@ -10,6 +10,7 @@ coverage
 *.tgz
 .pnpm-store
 .cursor/
+internal/
 .next/
 apps/dashboard/test-results/
 apps/dashboard/playwright-report/

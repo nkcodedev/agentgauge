@@ -1,40 +1,69 @@
 # AgentGauge
 
-> Observability and cost intelligence for AI agents.
+Open-source observability and cost intelligence for AI agents.
 
-**Current release target: `0.4.0` (Milestone 4 — Web Dashboard and Public MVP)**
+Track requests, tokens, cost, latency, errors, agents, models, and traces in real time.
 
-Licensed under the [Apache License 2.0](./LICENSE).
+[![npm @agentgauge/node](https://img.shields.io/npm/v/@agentgauge/node.svg?label=%40agentgauge%2Fnode)](https://www.npmjs.com/package/@agentgauge/node)
+[![npm @agentgauge/openai](https://img.shields.io/npm/v/@agentgauge/openai.svg?label=%40agentgauge%2Fopenai)](https://www.npmjs.com/package/@agentgauge/openai)
+[![Node.js >= 20](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
 ---
 
-## Product flow
+AgentGauge gives engineering teams visibility into how AI agents behave in production.
+
+See which agents are running, how many tokens they consume, what they cost, which models they use, where failures occur, and how usage changes over time.
+
+**AgentGauge does not store prompts or completions by default.** Telemetry is metadata-first: operational signals only, not conversational content.
+
+---
+
+## Dashboard
+
+The self-hosted dashboard shows overview KPIs, agents, traces, and API-key settings.
+
+Screenshots belong in [`docs/assets/`](./docs/assets/) (see that folder’s README). Add PNGs named:
 
 ```text
-Install SDK
-→ send telemetry
-→ AgentGauge API
-→ PostgreSQL
-→ cost intelligence
-→ web dashboard
+docs/assets/dashboard-overview.png
+docs/assets/dashboard-agents.png
+docs/assets/dashboard-traces.png
 ```
 
----
-
-## What `0.4.0` supports
-
-- Manual + OpenAI SDK tracing
-- Cloud/self-hosted ingestion API
-- PostgreSQL persistence + cost engine
-- Usage / agents / traces APIs
-- API-key create/list/revoke
-- Web dashboard (overview, agents, traces, settings)
-
-Auth note: the dashboard MVP uses a **server-side project API key** (`AGENTGAUGE_API_KEY`). This is temporary — not end-user login.
+Then reference them here once captured from a local demo (never include real secrets).
 
 ---
 
-## Install (SDK)
+## Features
+
+- Real-time dashboard updates (SSE)
+- Manual AI agent / request tracing
+- Automatic OpenAI instrumentation
+- Token usage tracking
+- Server-side estimated cost intelligence
+- Agent-level analytics
+- Model and provider breakdowns
+- Latency monitoring
+- Error tracking
+- Trace explorer with filters and pagination
+- Project API-key create / list / revoke
+- Historical model pricing rows
+- Self-hosted API + PostgreSQL + dashboard
+- Metadata-first / privacy-first telemetry
+
+---
+
+## Quick start
+
+### Install
+
+```bash
+npm install @agentgauge/node
+```
+
+For OpenAI automatic instrumentation:
 
 ```bash
 npm install @agentgauge/node @agentgauge/openai openai
@@ -42,98 +71,279 @@ npm install @agentgauge/node @agentgauge/openai openai
 
 Requires **Node.js >= 20**.
 
----
-
-## Local backend + dashboard
-
-```bash
-pnpm install
-docker compose up -d
-pnpm db:migrate
-pnpm dev:seed          # prints one-time API key
-```
-
-Put the key into `apps/dashboard/.env.local`:
-
-```bash
-AGENTGAUGE_API_URL=http://127.0.0.1:3000
-AGENTGAUGE_API_KEY=ag_live_...
-```
-
-Then:
-
-```bash
-pnpm dev
-```
-
-| Service   | Port     |
-| --------- | -------- |
-| API       | 3000     |
-| Dashboard | 3001     |
-| Worker    | (poller) |
-
-Optional demo traces:
-
-```bash
-pnpm dev:seed-demo
-```
-
----
-
-## SDK → cloud
+### Manual tracing
 
 ```ts
 import { AgentGauge } from "@agentgauge/node";
 
 const gauge = new AgentGauge({
   apiKey: process.env.AGENTGAUGE_API_KEY,
-  endpoint: "http://localhost:3000",
+  endpoint: process.env.AGENTGAUGE_ENDPOINT ?? "http://localhost:3000",
+});
+
+const trace = gauge.startTrace({
+  agentId: "support-agent",
+  provider: "openai",
+  model: "gpt-4o-mini",
+});
+
+trace.end({ inputTokens: 100, outputTokens: 30 });
+await gauge.shutdown();
+```
+
+For local development without a backend, use `transport: { type: "console" }` instead of `apiKey` / `endpoint`.
+
+### OpenAI instrumentation
+
+```ts
+import OpenAI from "openai";
+import { AgentGauge } from "@agentgauge/node";
+import { observeOpenAI } from "@agentgauge/openai";
+
+const gauge = new AgentGauge({
+  apiKey: process.env.AGENTGAUGE_API_KEY,
+  endpoint: process.env.AGENTGAUGE_ENDPOINT,
+});
+
+const openai = observeOpenAI(new OpenAI(), {
+  gauge,
+  agentId: "support-agent",
+});
+
+await openai.responses.create({
+  model: "gpt-4o-mini",
+  input: "Hello",
 });
 ```
+
+### AgentGauge API key vs provider key
+
+| Key                  | Purpose                                 |
+| -------------------- | --------------------------------------- |
+| `OPENAI_API_KEY`     | Authenticates with OpenAI               |
+| `AGENTGAUGE_API_KEY` | Authenticates telemetry with AgentGauge |
+
+AgentGauge does **not** replace your provider API key. Both may be required when sending OpenAI traffic and AgentGauge telemetry.
+
+---
+
+## How it works
+
+```text
+Your AI application
+      │
+      ▼
+@agentgauge/node / @agentgauge/openai
+      │
+      ▼
+AgentGauge API
+      │
+      ▼
+PostgreSQL
+      │
+      ├── Cost Engine
+      └── Event Bus
+              │
+              ▼
+             SSE
+              │
+              ▼
+      Real-Time Dashboard
+```
+
+- **PostgreSQL** is the source of truth for traces, agents, usage, and costs.
+- Telemetry is **validated, authenticated, and persisted** before live events are published.
+- SSE carries a lightweight `trace.created` signal — not the full dashboard state.
+- The dashboard refetches canonical APIs (`/v1/usage`, `/v1/agents`, `/v1/traces`, …).
+- The current event bus is **in-memory and single-API-process**; multi-replica fan-out needs distributed pub/sub later.
+
+---
+
+## Real-time dashboard
+
+When a completed trace is persisted, AgentGauge publishes a project-scoped event through SSE. The dashboard receives the event and refreshes relevant metrics automatically.
+
+**No manual browser refresh is required.**
+
+Details:
+
+- ~**500 ms** event coalescing (bursts refetch once)
+- Automatic reconnect with backoff
+- **Live / Reconnecting / Offline** connection status in the UI
+
+“Real-time” means: completed AgentGauge telemetry updates the dashboard live. It does **not** mean provider token-by-token streaming.
 
 ---
 
 ## Packages
 
-| Package                 | Role                   | Version |
-| ----------------------- | ---------------------- | ------- |
-| `@agentgauge/core`      | Shared contracts       | `0.4.0` |
-| `@agentgauge/node`      | Node.js SDK            | `0.4.0` |
-| `@agentgauge/openai`    | OpenAI instrumentation | `0.4.0` |
-| `@agentgauge/db`        | Private DB             | `0.4.0` |
-| `@agentgauge/api`       | Private API            | `0.4.0` |
-| `@agentgauge/worker`    | Private worker         | `0.4.0` |
-| `@agentgauge/dashboard` | Private Next.js app    | `0.4.0` |
+| Package                                                                  | Purpose                              |
+| ------------------------------------------------------------------------ | ------------------------------------ |
+| [`@agentgauge/core`](https://www.npmjs.com/package/@agentgauge/core)     | Provider-neutral telemetry contracts |
+| [`@agentgauge/node`](https://www.npmjs.com/package/@agentgauge/node)     | Node.js SDK and transports           |
+| [`@agentgauge/openai`](https://www.npmjs.com/package/@agentgauge/openai) | OpenAI automatic instrumentation     |
+
+Apps under `apps/` (`api`, `worker`, `dashboard`) and `packages/db` are part of the self-hosted platform and are not published to npm.
 
 ---
 
-## Not included yet
+## OpenAI support
 
-- User signup / OAuth / SSO
-- Billing / Stripe
-- Teams / RBAC
-- Anthropic / Gemini
-- Budgets / alerts / governance
+Supported (**non-streaming**):
+
+- `responses.create`
+- `chat.completions.create`
+
+Streaming (`stream: true`) currently passes through **without** AgentGauge telemetry.
+
+Not instrumented yet: embeddings, images, audio, assistants, realtime, batches, and other providers.
 
 ---
 
-## Documentation
+## What AgentGauge records
 
-See `docs/` — especially [API_DESIGN.md](./docs/API_DESIGN.md), [ARCHITECTURE.md](./docs/ARCHITECTURE.md), [SECURITY.md](./docs/SECURITY.md).
+| Data              | Recorded                    |
+| ----------------- | --------------------------- |
+| Agent ID          | Yes                         |
+| Provider / model  | Yes                         |
+| Token usage       | Yes                         |
+| Latency           | Yes                         |
+| Status / errors   | Yes                         |
+| Estimated cost    | Yes (when pricing is known) |
+| Tags / metadata   | Yes                         |
+| Prompt text       | **No** by default           |
+| Completion text   | **No** by default           |
+| Provider API keys | **Never**                   |
+
+---
+
+## Cost intelligence
+
+- Cost is calculated **server-side** on ingest.
+- Pricing uses provider + model + effective date ranges in `model_pricing`.
+- Historical calculated costs remain stable for existing rows.
+- Unknown models keep token counts and show **Cost unavailable** (never a fabricated `$0`).
+- Pricing tables require maintenance and are **not** guaranteed to mirror live provider rate cards.
+
+Costs are **estimates** for observability — not provider invoice amounts.
+
+---
+
+## Self-hosting
+
+**PostgreSQL 16+** is required for the AgentGauge API, worker, and dashboard.
+
+PostgreSQL is **not** required to use the SDK with console or custom transports alone.
+
+```text
+SDK → AgentGauge API → PostgreSQL → Dashboard
+```
+
+```bash
+pnpm install
+docker compose up -d
+pnpm db:migrate
+pnpm dev:seed          # prints a one-time API key
+```
+
+Configure `apps/dashboard/.env.local`, then `pnpm dev`. Full steps: [`docs/SELF_HOSTING.md`](./docs/SELF_HOSTING.md).
+
+| Service   | URL                                |
+| --------- | ---------------------------------- |
+| API       | http://localhost:3000              |
+| Dashboard | http://localhost:3001              |
+| Health    | http://localhost:3000/health       |
+| OpenAPI   | http://localhost:3000/openapi.json |
+
+---
+
+## API overview
+
+| Method       | Path                                |
+| ------------ | ----------------------------------- |
+| `POST`       | `/v1/traces`, `/v1/traces/batch`    |
+| `GET`        | `/v1/usage`                         |
+| `GET`        | `/v1/agents`, `/v1/agents/:agentId` |
+| `GET`        | `/v1/traces`, `/v1/traces/:eventId` |
+| `GET`        | `/v1/events/stream`                 |
+| `GET`/`POST` | `/v1/api-keys` (+ revoke)           |
+
+See [`docs/API.md`](./docs/API.md) and `GET /openapi.json` for details.
+
+---
+
+## Security and privacy
+
+- Project API keys are hashed at rest (SHA-256, optional pepper).
+- Plaintext keys are shown **once** at creation.
+- Access is project-scoped; revocation is supported.
+- Prompts and completions are not collected by default.
+- Provider API keys are never collected.
+- SSE streams are project-isolated and do not carry secrets or prompt content.
+
+AgentGauge is an early public MVP — treat it as pre-1.0 infrastructure, not an enterprise-certified security product.
+
+More: [`SECURITY.md`](./SECURITY.md).
+
+---
+
+## Development
+
+```bash
+pnpm install
+pnpm build
+pnpm test
+pnpm lint
+pnpm typecheck
+pnpm check
+```
+
+Integration, database, and dashboard E2E tests expect a reachable PostgreSQL instance (see `docker-compose.yml`).
+
+Further docs: [ARCHITECTURE](./docs/ARCHITECTURE.md), [TELEMETRY](./docs/TELEMETRY.md), [SELF_HOSTING](./docs/SELF_HOSTING.md), [CONTRIBUTING](./CONTRIBUTING.md).
+
+---
+
+## Testing
+
+Automated coverage includes unit tests, API integration tests, database tests, SDK → API → DB E2E, dashboard component tests, and Playwright flows (including real-time dashboard updates).
+
+---
+
+## Project status
+
+AgentGauge is an **early public MVP / pre-1.0** project. APIs and schemas may still evolve. See [CHANGELOG.md](./CHANGELOG.md).
+
+Current prepared release line: **`0.5.0`** (real-time dashboard via SSE).
 
 ---
 
 ## Roadmap
 
-1. **0.1.0** — Core SDK ✅
-2. **0.2.0** — OpenAI observability ✅
-3. **0.3.0** — Cloud telemetry + cost ✅
-4. **0.4.0** — Web dashboard / public MVP (this milestone)
+Directional only — no dates:
+
+- Multi-provider instrumentation
+- Budgets and alerts
+- Deeper agent / tool tracing
+- Distributed real-time event delivery
+- Governance and policies
+
+---
+
+## Feedback
+
+AgentGauge is shared early so real developers can shape the product.
+
+If you are building AI/LLM applications, feedback on integration, observability, cost tracking, tracing, and missing workflows is especially useful. Please open a [GitHub issue](https://github.com/nkcodedev/agentgauge/issues).
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
 ## License
 
-Copyright 2026 The AgentGauge Authors
-
-Licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE).
+Licensed under the [Apache License 2.0](./LICENSE).

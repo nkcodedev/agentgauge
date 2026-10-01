@@ -14,12 +14,17 @@ import {
 } from "./services/query.js";
 import { createApiKey, listApiKeys, revokeApiKey } from "./services/api-keys.js";
 import { InMemoryRateLimiter } from "./lib/rate-limit.js";
+import { defaultProjectEventBus, type ProjectEventBus } from "./lib/project-event-bus.js";
 import { openApiDocument } from "./openapi.js";
+
+const SSE_HEARTBEAT_MS = 20_000;
 
 export interface BuildAppOptions {
   readonly databaseUrl?: string;
   readonly db?: Database;
   readonly rateLimitPerMinute?: number;
+  /** Injectable for tests; defaults to process-wide in-memory bus. */
+  readonly eventBus?: ProjectEventBus;
 }
 
 declare module "fastify" {
@@ -66,6 +71,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     );
 
   const rateLimiter = new InMemoryRateLimiter(options.rateLimitPerMinute ?? 600, 60_000);
+  const eventBus = options.eventBus ?? defaultProjectEventBus;
 
   const app = Fastify({
     logger: process.env.NODE_ENV !== "test",
@@ -97,6 +103,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!request.url.startsWith("/v1/")) return;
     const auth = await requireAuth(request, reply, db);
     if (!auth) return;
+
+    // Long-lived SSE connections authenticate once and must not burn rate-limit budget
+    // on heartbeats or EventSource reconnects.
+    const pathOnly = request.url.split("?")[0] ?? request.url;
+    if (pathOnly === "/v1/events/stream") return;
 
     const result = rateLimiter.check(auth.apiKey.id);
     void reply.header("x-ratelimit-limit", String(options.rateLimitPerMinute ?? 600));
@@ -131,7 +142,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const results = [];
     try {
       for (const event of parsed.data.events) {
-        results.push(await ingestEvent(db, auth.project, event));
+        const result = await ingestEvent(db, auth.project, event);
+        results.push(result);
+        // Emit only after successful persistence of a new row — never for duplicates.
+        if (!result.duplicate) {
+          eventBus.publish(auth.project.id, {
+            type: "trace.created",
+            projectId: auth.project.id,
+            agentId: event.agentId,
+            eventId: event.eventId,
+            occurredAt: new Date().toISOString(),
+          });
+        }
       }
     } catch (error) {
       if (error instanceof ProjectMismatchError) {
@@ -151,6 +173,46 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.post("/v1/traces", handleIngest);
   app.post("/v1/traces/batch", handleIngest);
+
+  /**
+   * Project-scoped Server-Sent Events stream for dashboard live updates.
+   * Payload is intentionally lightweight; clients refetch canonical APIs.
+   */
+  app.get("/v1/events/stream", async (request, reply) => {
+    const auth = request.auth!;
+    const projectId = auth.project.id;
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    reply.raw.write(": connected\n\n");
+
+    const writeEvent = (eventName: string, data: unknown) => {
+      reply.raw.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    writeEvent("ready", { projectId, occurredAt: new Date().toISOString() });
+
+    const unsubscribe = eventBus.subscribe(projectId, (event) => {
+      writeEvent(event.type, event);
+    });
+
+    const heartbeat = setInterval(() => {
+      reply.raw.write(": heartbeat\n\n");
+    }, SSE_HEARTBEAT_MS);
+
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+
+    request.raw.on("close", cleanup);
+    request.raw.on("error", cleanup);
+  });
 
   app.get("/v1/usage", async (request, reply) => {
     const auth = request.auth!;

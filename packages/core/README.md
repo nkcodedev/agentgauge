@@ -1,8 +1,8 @@
 # @agentgauge/core
 
-Shared contracts, validation, and primitives for AgentGauge telemetry.
+Provider-neutral telemetry contracts, validation, and shared primitives for AgentGauge.
 
-This package is runtime-neutral: it does not depend on Node.js APIs, HTTP clients, or provider SDKs.
+This package is **runtime-neutral**: no Node.js APIs, HTTP clients, or provider SDKs.
 
 Most applications should depend on [`@agentgauge/node`](https://www.npmjs.com/package/@agentgauge/node) rather than importing `@agentgauge/core` directly.
 
@@ -10,6 +10,18 @@ Most applications should depend on [`@agentgauge/node`](https://www.npmjs.com/pa
 
 ```bash
 npm install @agentgauge/core
+```
+
+Requires **Node.js >= 20** when used from AgentGauge Node packages.
+
+## Role in AgentGauge
+
+```text
+@agentgauge/core  ← shared TraceEvent / validation types
+       ↑
+@agentgauge/node  ← SDK + transports
+       ↑
+@agentgauge/openai
 ```
 
 ## License
