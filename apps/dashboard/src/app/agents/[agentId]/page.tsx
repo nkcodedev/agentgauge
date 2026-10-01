@@ -10,7 +10,6 @@ import {
   rangeFromPreset,
 } from "@/lib/format";
 import { BreakdownBars, TimeSeriesChart } from "@/components/charts";
-import { MobileNav } from "@/components/range-filter";
 import { Card, ErrorBanner, KpiCard, PageHeader, StatusPill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +24,6 @@ export default async function AgentDetailPage({
 
   return (
     <div>
-      <MobileNav />
       <PageHeader
         title={decoded}
         description="Usage summary for a single auto-discovered agent."

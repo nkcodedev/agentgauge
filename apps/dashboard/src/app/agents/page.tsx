@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ApiError, fetchAgents, type AgentSummary } from "@/lib/api-client";
 import { hasServerApiKey } from "@/lib/env";
-import { MobileNav } from "@/components/range-filter";
 import { EmptyState, ErrorBanner, PageHeader } from "@/components/ui";
 import { AgentsTable } from "@/components/agents-table";
 
@@ -17,7 +16,6 @@ export default async function AgentsPage({
 
   return (
     <div>
-      <MobileNav />
       <PageHeader
         title="Agents"
         description="Agents are discovered automatically when telemetry arrives."
@@ -67,10 +65,16 @@ function sortAgents(agents: AgentSummary[], sort: string): AgentSummary[] {
     switch (sort) {
       case "requests":
         return b.requestCount - a.requestCount;
+      case "tokens":
+        return b.totalTokens - a.totalTokens;
       case "cost":
         return b.estimatedCost - a.estimatedCost;
       case "errors":
-        return b.errorCount - a.errorCount;
+        return (
+          b.errorCount / Math.max(b.requestCount, 1) - a.errorCount / Math.max(a.requestCount, 1)
+        );
+      case "latency":
+        return b.averageLatencyMs - a.averageLatencyMs;
       case "lastSeen":
       default:
         return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
