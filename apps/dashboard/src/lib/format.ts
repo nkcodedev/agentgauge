@@ -13,6 +13,39 @@ export function intervalForPreset(preset: RangePreset): "hour" | "day" {
   return preset === "24h" ? "hour" : "day";
 }
 
+export function resolveWindow(input: { range?: string; from?: string; to?: string }): {
+  from: string;
+  to: string;
+  preset: RangePreset | "custom";
+} {
+  if (
+    input.from &&
+    input.to &&
+    !Number.isNaN(Date.parse(input.from)) &&
+    !Number.isNaN(Date.parse(input.to))
+  ) {
+    return {
+      from: new Date(input.from).toISOString(),
+      to: new Date(input.to).toISOString(),
+      preset: "custom",
+    };
+  }
+  const preset = (
+    ["24h", "7d", "30d"].includes(input.range ?? "") ? input.range : "7d"
+  ) as RangePreset;
+  return { ...rangeFromPreset(preset), preset };
+}
+
+export function intervalForWindow(window: {
+  from: string;
+  to: string;
+  preset: RangePreset | "custom";
+}): "hour" | "day" {
+  if (window.preset !== "custom") return intervalForPreset(window.preset);
+  const span = new Date(window.to).getTime() - new Date(window.from).getTime();
+  return span <= 48 * 60 * 60 * 1000 ? "hour" : "day";
+}
+
 export function formatCost(
   value: number | string | null | undefined,
   options?: { unavailable?: boolean; currency?: string | null },

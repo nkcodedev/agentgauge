@@ -1,6 +1,6 @@
 import { ApiError, fetchRuns } from "@/lib/api-client";
 import { hasServerApiKey } from "@/lib/env";
-import { rangeFromPreset, type RangePreset } from "@/lib/format";
+import { resolveWindow, type RangePreset } from "@/lib/format";
 import { RunFilters } from "@/components/run-filters";
 import { RunsTable } from "@/components/runs-table";
 import { EmptyState, ErrorBanner, PageHeader } from "@/components/ui";
@@ -12,15 +12,16 @@ export default async function RunsPage({
 }: {
   searchParams: Promise<{
     range?: string;
+    from?: string;
+    to?: string;
     agentId?: string;
     status?: string;
     cursor?: string;
   }>;
 }) {
   const params = await searchParams;
-  const range = (
-    ["24h", "7d", "30d"].includes(params.range ?? "") ? params.range : "7d"
-  ) as RangePreset;
+  const window = resolveWindow(params);
+  const range = (window.preset === "custom" ? "7d" : window.preset) as RangePreset;
 
   return (
     <div>
@@ -30,6 +31,8 @@ export default async function RunsPage({
       />
       <RunsBody
         range={range}
+        from={window.from}
+        to={window.to}
         agentId={params.agentId}
         status={params.status}
         cursor={params.cursor}
@@ -40,6 +43,8 @@ export default async function RunsPage({
 
 async function RunsBody(props: {
   range: RangePreset;
+  from: string;
+  to: string;
   agentId?: string;
   status?: string;
   cursor?: string;
@@ -49,9 +54,9 @@ async function RunsBody(props: {
   }
 
   try {
-    const window = rangeFromPreset(props.range);
     const page = await fetchRuns({
-      ...window,
+      from: props.from,
+      to: props.to,
       ...(props.agentId ? { agentId: props.agentId } : {}),
       ...(props.status ? { status: props.status } : {}),
       ...(props.cursor ? { cursor: props.cursor } : {}),

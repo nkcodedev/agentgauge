@@ -1,6 +1,6 @@
 import { ApiError, fetchTraces, fetchTrace } from "@/lib/api-client";
 import { hasServerApiKey } from "@/lib/env";
-import { rangeFromPreset, type RangePreset } from "@/lib/format";
+import { resolveWindow, type RangePreset } from "@/lib/format";
 import { EmptyState, ErrorBanner, PageHeader, PrivacyBadge } from "@/components/ui";
 import { TracesExplorer } from "@/components/traces-explorer";
 
@@ -11,6 +11,8 @@ export default async function TracesPage({
 }: {
   searchParams: Promise<{
     range?: string;
+    from?: string;
+    to?: string;
     agentId?: string;
     provider?: string;
     model?: string;
@@ -20,9 +22,8 @@ export default async function TracesPage({
   }>;
 }) {
   const params = await searchParams;
-  const range = (
-    ["24h", "7d", "30d"].includes(params.range ?? "") ? params.range : "7d"
-  ) as RangePreset;
+  const window = resolveWindow(params);
+  const range = (window.preset === "custom" ? "7d" : window.preset) as RangePreset;
 
   return (
     <div>
@@ -33,6 +34,8 @@ export default async function TracesPage({
       />
       <TracesBody
         range={range}
+        from={window.from}
+        to={window.to}
         agentId={params.agentId}
         provider={params.provider}
         model={params.model}
@@ -46,6 +49,8 @@ export default async function TracesPage({
 
 async function TracesBody(props: {
   range: RangePreset;
+  from: string;
+  to: string;
   agentId?: string;
   provider?: string;
   model?: string;
@@ -58,10 +63,10 @@ async function TracesBody(props: {
   }
 
   try {
-    const window = rangeFromPreset(props.range);
     const [page, detail] = await Promise.all([
       fetchTraces({
-        ...window,
+        from: props.from,
+        to: props.to,
         ...(props.agentId ? { agentId: props.agentId } : {}),
         ...(props.provider ? { provider: props.provider } : {}),
         ...(props.model ? { model: props.model } : {}),

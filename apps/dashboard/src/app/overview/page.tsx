@@ -6,8 +6,8 @@ import {
   formatCost,
   formatLatency,
   formatNumber,
-  intervalForPreset,
-  rangeFromPreset,
+  intervalForWindow,
+  resolveWindow,
   type RangePreset,
 } from "@/lib/format";
 import { errorRateDelta, halfDelta } from "@/lib/series";
@@ -53,7 +53,17 @@ function healthLine(usage: UsageResponse, range: RangePreset): string {
   return `${formatNumber(usage.activeAgents)} active agents · ${formatNumber(usage.errors)} errors (${rate.toFixed(1)}%) · ${formatCost(usage.estimatedCost)} this ${range === "24h" ? "day" : "range"}${delta}`;
 }
 
-async function OverviewBody({ range }: { range: RangePreset }) {
+async function OverviewBody({
+  range,
+  from,
+  to,
+  interval,
+}: {
+  range: RangePreset;
+  from: string;
+  to: string;
+  interval: "hour" | "day";
+}) {
   if (!hasServerApiKey()) {
     return (
       <ErrorBanner message="Set AGENTGAUGE_API_KEY in apps/dashboard/.env.local (server-side only) to connect the dashboard." />
@@ -61,11 +71,7 @@ async function OverviewBody({ range }: { range: RangePreset }) {
   }
 
   try {
-    const window = rangeFromPreset(range);
-    const usage = await fetchUsage({
-      ...window,
-      interval: intervalForPreset(range),
-    });
+    const usage = await fetchUsage({ from, to, interval });
 
     if (usage.requests === 0) return <Onboarding />;
 
@@ -195,12 +201,11 @@ async function OverviewBody({ range }: { range: RangePreset }) {
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
   const params = await searchParams;
-  const range = (
-    ["24h", "7d", "30d"].includes(params.range ?? "") ? params.range : "7d"
-  ) as RangePreset;
+  const window = resolveWindow(params);
+  const range = window.preset === "custom" ? "7d" : window.preset;
 
   return (
     <div>
@@ -214,7 +219,12 @@ export default async function OverviewPage({
           </div>
         }
       >
-        <OverviewBody range={range} />
+        <OverviewBody
+          from={window.from}
+          to={window.to}
+          interval={intervalForWindow(window)}
+          range={range}
+        />
       </Suspense>
     </div>
   );
