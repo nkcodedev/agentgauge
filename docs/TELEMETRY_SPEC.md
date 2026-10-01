@@ -1,6 +1,6 @@
 # AgentGauge Telemetry Spec (V1)
 
-**Status:** Implemented in `@agentgauge/core` / `@agentgauge/node` `0.1.0`
+**Status:** Implemented through `@agentgauge/openai` `0.2.0` for OpenAI adapters; schema remains provider-neutral
 **Version:** Telemetry schema V1
 **Related:** [ARCHITECTURE.md](./ARCHITECTURE.md), [SECURITY.md](./SECURITY.md), [API_DESIGN.md](./API_DESIGN.md)
 

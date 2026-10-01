@@ -2,120 +2,84 @@
 
 > Observability and cost intelligence for AI agents.
 
-**Current release: `0.1.0` (Milestone 1 — Core SDK)**
+**Current release target: `0.2.0` (Milestone 2 — OpenAI Observability)**
+Published npm packages today may still be `0.1.0` until `0.2.0` is released.
 
 Licensed under the [Apache License 2.0](./LICENSE).
 
 ---
 
-## What `0.1.0` supports
+## What `0.2.0` supports
 
-- Manual AI agent tracing
-- Token usage recording
-- Latency measurement
-- Success/error tracing
-- Console transport
-- Custom transport
-- HTTP transport foundation
-- Best-effort telemetry delivery (`flush` / `shutdown`)
+- Manual AI agent tracing (`@agentgauge/node`)
+- OpenAI automatic instrumentation (`@agentgauge/openai`)
+- Token usage, model, latency, success/error traces
+- Console, custom, HTTP, and batched transports
 
-## Not included in `0.1.0`
+## Not included yet
 
-- Automatic OpenAI instrumentation
-- Hosted dashboard
-- Cloud ingestion service
+- Hosted AgentGauge API / cloud ingestion
+- Dashboard
 - Cost calculation
-- Anthropic integration
-- Gemini integration
+- Anthropic / Gemini integrations
+- Budgets, alerts, governance
 
 ---
 
 ## Install
 
 ```bash
-npm install @agentgauge/node
+npm install @agentgauge/node @agentgauge/openai openai
 ```
 
-`@agentgauge/core` is installed automatically as a dependency of `@agentgauge/node`.
-
-Requires **Node.js >= 20**.
+Requires **Node.js >= 20**. Peer: `openai` `^4 || ^5 || ^6`.
 
 ---
 
-## Quick start
+## Quick start (OpenAI)
 
 ```ts
+import OpenAI from "openai";
 import { AgentGauge } from "@agentgauge/node";
+import { observeOpenAI } from "@agentgauge/openai";
 
 const gauge = new AgentGauge({
-  project: "my-project",
-  environment: "development",
   transport: { type: "console" },
 });
 
-const trace = gauge.startTrace({
+const openai = observeOpenAI(new OpenAI(), {
+  gauge,
   agentId: "support-agent",
-  provider: "openai",
-  model: "gpt-5",
-  operationName: "answer-customer",
 });
 
-try {
-  // your AI / business logic
-  const result = { inputTokens: 1200, outputTokens: 320 };
-  trace.end({
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
-  });
-} catch (error) {
-  trace.fail(error);
-  throw error;
-}
-
-await gauge.flush();
-await gauge.shutdown();
-```
-
-### Custom transport
-
-```ts
-import { AgentGauge, type TraceEvent } from "@agentgauge/node";
-
-const events: TraceEvent[] = [];
-
-const gauge = new AgentGauge({
-  transport: {
-    async send(event) {
-      events.push(event);
-    },
-  },
+const response = await openai.responses.create({
+  model: "gpt-4.1-mini",
+  input: "Explain circuit breakers simply.",
 });
 ```
 
-### HTTP transport foundation
+Prompts and completions are **not** captured. Streaming (`stream: true`) is passed through without telemetry in `0.2.0`.
+
+### Manual tracing
 
 ```ts
 import { AgentGauge } from "@agentgauge/node";
 
-const gauge = new AgentGauge({
-  apiKey: "ag_test_example",
-  transport: {
-    type: "http",
-    endpoint: "https://api.example.com/v1/traces",
-  },
-});
+const gauge = new AgentGauge({ transport: { type: "console" } });
+const trace = gauge.startTrace({ agentId: "support-agent" });
+trace.end({ inputTokens: 100, outputTokens: 30 });
+await gauge.shutdown();
 ```
-
-HTTP delivery failures are best-effort: they never fail your application logic.
 
 ---
 
 ## Packages
 
-| Package            | Role                                 | Version |
-| ------------------ | ------------------------------------ | ------- |
-| `@agentgauge/core` | Shared contracts, validation, errors | `0.1.0` |
-| `@agentgauge/node` | Node.js SDK                          | `0.1.0` |
+| Package              | Role                   | Version |
+| -------------------- | ---------------------- | ------- |
+| `@agentgauge/core`   | Shared contracts       | `0.2.0` |
+| `@agentgauge/node`   | Node.js SDK            | `0.2.0` |
+| `@agentgauge/openai` | OpenAI instrumentation | `0.2.0` |
 
 ---
 
@@ -124,7 +88,7 @@ HTTP delivery failures are best-effort: they never fail your application logic.
 ```bash
 pnpm install
 pnpm check
-pnpm --filter @agentgauge/manual-node-example start
+pnpm --filter @agentgauge/openai-example start
 ```
 
 See [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md).
@@ -147,7 +111,7 @@ See [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md).
 ## Roadmap
 
 1. **0.1.0** — Core SDK ✅
-2. **0.2.0** — OpenAI observability
+2. **0.2.0** — OpenAI observability ✅ (this milestone)
 3. **0.3.0** — Cloud telemetry ingestion, persistence, cost estimation
 4. **0.4.0** — Public MVP dashboard
 

@@ -79,9 +79,11 @@ Public MVP ≈ Milestone 4. Earlier milestones are incremental, releasable slice
 
 ### Exit criteria
 
-- Instrumenting OpenAI produces valid `TraceEvent`s
-- Customer OpenAI calls succeed even if telemetry transport fails
-- Docs for OpenAI package published
+- Instrumenting OpenAI produces valid `TraceEvent`s ✅
+- Customer OpenAI calls succeed even if telemetry transport fails ✅
+- Docs for OpenAI package published ✅
+
+**Status:** Complete for `0.2.0` (implementation present; npm publish deferred).
 
 ---
 

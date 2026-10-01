@@ -1,20 +1,10 @@
 # @agentgauge/node
 
-Node.js SDK for AgentGauge manual AI agent tracing and telemetry.
+Node.js SDK for AgentGauge.
 
-**0.1.0 supports:** manual tracing, token usage, latency, success/error traces, console/custom/HTTP transports, flush/shutdown.
-
-**Not included yet:** automatic OpenAI instrumentation, hosted dashboard, cloud ingestion, cost calculation, Anthropic/Gemini.
+Supports manual tracing, console/custom/HTTP/`BatchedTransport`, flush, and shutdown.
 
 Telemetry delivery is best-effort: transport failures never fail your application logic.
-
-## Install
-
-```bash
-npm install @agentgauge/node
-```
-
-## Quick start
 
 ```ts
 import { AgentGauge } from "@agentgauge/node";
@@ -26,12 +16,14 @@ const gauge = new AgentGauge({
 const trace = gauge.startTrace({
   agentId: "support-agent",
   provider: "openai",
-  model: "gpt-5",
+  model: "gpt-4.1-mini",
 });
 
 trace.end({ inputTokens: 100, outputTokens: 30 });
 await gauge.shutdown();
 ```
+
+For OpenAI automatic instrumentation, install `@agentgauge/openai`.
 
 ## License
 

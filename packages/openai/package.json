@@ -1,7 +1,7 @@
 {
-  "name": "@agentgauge/node",
+  "name": "@agentgauge/openai",
   "version": "0.2.0",
-  "description": "Node.js SDK for AgentGauge manual AI agent tracing and telemetry",
+  "description": "OpenAI automatic instrumentation for AgentGauge",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
@@ -14,6 +14,7 @@
     "telemetry",
     "llm",
     "tracing",
+    "openai",
     "typescript",
     "nodejs"
   ],
@@ -37,13 +38,23 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentgauge/core": "workspace:*"
+    "@agentgauge/core": "workspace:*",
+    "@agentgauge/node": "workspace:*"
+  },
+  "peerDependencies": {
+    "openai": "^4.0.0 || ^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": false
+    }
   },
   "publishConfig": {
     "access": "public"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "openai": "^4.104.0",
     "tsup": "^8.4.0",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8"

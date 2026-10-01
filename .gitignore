@@ -9,3 +9,4 @@ coverage
 !.env.example
 *.tgz
 .pnpm-store
+.cursor/

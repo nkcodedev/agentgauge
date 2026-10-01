@@ -18,24 +18,26 @@ This document defines the high-level system architecture, package responsibiliti
 
 ## Repository Layout
 
-Initial monorepo structure (Milestone 1 creates packages/examples; apps arrive later):
+Initial monorepo structure:
 
 ```text
 agentgauge/
 ├── apps/              # reserved (.gitkeep); api/dashboard/worker in later milestones
 │
 ├── packages/
-│   ├── core/          # @agentgauge/core ✅ 0.1.0
-│   └── node/          # @agentgauge/node ✅ 0.1.0
+│   ├── core/          # @agentgauge/core ✅ 0.2.0
+│   ├── node/          # @agentgauge/node ✅ 0.2.0
+│   └── openai/        # @agentgauge/openai ✅ 0.2.0
 │
 ├── examples/
-│   └── manual-node/
+│   ├── manual-node/
+│   └── openai/
 ├── docs/
 ├── scripts/
 └── ...
 ```
 
-`packages/openai` and `apps/*` implementations are intentionally absent until their milestones.
+`apps/*` implementations remain deferred until their milestones.
 Directories may be introduced when the corresponding milestone requires them. Do not create empty app shells that pretend features exist.
 
 ---

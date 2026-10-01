@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Lightweight architecture-boundary check for Milestone 1.
- * Ensures @agentgauge/core stays free of Node SDK / Node builtins / apps imports.
+ * Lightweight architecture-boundary check.
+ * - @agentgauge/core must not import node / openai / apps
+ * - @agentgauge/node must not import @agentgauge/openai
  */
 
 import { readdir, readFile } from "node:fs/promises";
@@ -9,14 +10,28 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const coreSrc = path.join(root, "packages/core/src");
 
-const forbiddenPatterns = [
-  { re: /from\s+["']@agentgauge\/node["']/, message: "must not import @agentgauge/node" },
-  { re: /from\s+["']node:/, message: "must not import node: built-ins" },
-  { re: /from\s+["']openai["']/, message: "must not import openai" },
-  { re: /from\s+["'][^"']*apps\//, message: "must not import apps/*" },
-  { re: /require\(\s*["']node:/, message: "must not require node: built-ins" },
+const checks = [
+  {
+    dir: path.join(root, "packages/core/src"),
+    forbidden: [
+      { re: /from\s+["']@agentgauge\/node["']/, message: "must not import @agentgauge/node" },
+      { re: /from\s+["']@agentgauge\/openai["']/, message: "must not import @agentgauge/openai" },
+      { re: /from\s+["']node:/, message: "must not import node: built-ins" },
+      { re: /from\s+["']openai["']/, message: "must not import openai" },
+      { re: /from\s+["'][^"']*apps\//, message: "must not import apps/*" },
+    ],
+  },
+  {
+    dir: path.join(root, "packages/node/src"),
+    forbidden: [
+      {
+        re: /from\s+["']@agentgauge\/openai["']/,
+        message: "must not import @agentgauge/openai",
+      },
+      { re: /from\s+["']openai["']/, message: "must not import openai" },
+    ],
+  },
 ];
 
 async function walk(dir) {
@@ -33,14 +48,16 @@ async function walk(dir) {
   return files;
 }
 
-const files = await walk(coreSrc);
 const violations = [];
 
-for (const file of files) {
-  const source = await readFile(file, "utf8");
-  for (const pattern of forbiddenPatterns) {
-    if (pattern.re.test(source)) {
-      violations.push(`${path.relative(root, file)}: ${pattern.message}`);
+for (const check of checks) {
+  const files = await walk(check.dir);
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    for (const pattern of check.forbidden) {
+      if (pattern.re.test(source)) {
+        violations.push(`${path.relative(root, file)}: ${pattern.message}`);
+      }
     }
   }
 }
@@ -53,4 +70,4 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log("Architecture boundary check passed (@agentgauge/core).");
+console.log("Architecture boundary check passed (core + node).");

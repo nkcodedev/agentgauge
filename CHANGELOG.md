@@ -2,6 +2,20 @@
 
 All notable changes to AgentGauge packages are documented here.
 
+## 0.2.0
+
+### Added
+
+- `@agentgauge/openai` — automatic OpenAI instrumentation
+- Support for `responses.create` and `chat.completions.create` (non-streaming)
+- `BatchedTransport` in `@agentgauge/node`
+- OpenAI example (`examples/openai`)
+
+### Notes
+
+- Streaming OpenAI requests are passed through without telemetry
+- Prompts/completions are never captured by default
+
 ## 0.1.0
 
 ### Added

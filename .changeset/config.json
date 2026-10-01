@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@agentgauge/manual-node-example"]
+  "ignore": ["@agentgauge/manual-node-example", "@agentgauge/openai-example"]
 }

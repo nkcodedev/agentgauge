@@ -148,6 +148,8 @@ When CI exists:
 - Provider fixtures should look realistic but contain no sensitive user content
 - Prefer shared fixture builders over copy-pasted giant JSON blobs when patterns repeat
 - Colocate unit/integration tests as `*.test.ts` next to source (Milestone 1)
+- Provider adapter tests must mock OpenAI; never call paid APIs in CI
+- Assert original provider errors/results are preserved when telemetry fails
 
 ---
 

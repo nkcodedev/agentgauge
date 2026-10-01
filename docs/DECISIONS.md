@@ -224,6 +224,90 @@ Need predictable behavior for SDK misuse vs delivery failure.
 
 ---
 
+## ADR-011: Per-instance OpenAI client wrapping via Proxy
+
+**Status:** Accepted
+
+### Context
+
+Milestone 2 needs automatic OpenAI telemetry without monkey-patching global SDK state or forcing AgentGauge-specific request APIs.
+
+### Decision
+
+`observeOpenAI(client, options)` returns a `Proxy` around the provided client instance that intercepts:
+
+- `responses.create`
+- `chat.completions.create`
+
+Only the returned wrapper is instrumented. Other OpenAI clients remain untouched.
+
+### Consequences
+
+- Clear isolation between instrumented and plain clients
+- Original method signatures and return values are preserved
+- Deep wrapping of every OpenAI surface is avoided
+
+---
+
+## ADR-012: OpenAI streaming is unsupported for telemetry in 0.2.0
+
+**Status:** Accepted
+
+### Context
+
+Correct streaming telemetry (token totals, final latency, safe finalization) requires more work than Milestone 2 scope allows.
+
+### Decision
+
+When `stream: true` is present, AgentGauge **passes the call through unchanged** and emits **no** telemetry. Behavior is documented and tested.
+
+### Consequences
+
+- Customer streaming is never broken by AgentGauge
+- Streaming observability is deferred to a later milestone
+
+---
+
+## ADR-013: Provider packages use openai as a peer dependency
+
+**Status:** Accepted
+
+### Context
+
+Apps already depend on a specific OpenAI SDK version. Bundling another copy risks duplicate clients and type conflicts.
+
+### Decision
+
+`@agentgauge/openai` declares `openai` as a **peerDependency** (`^4 || ^5 || ^6`) and depends on `@agentgauge/node` / `@agentgauge/core` normally.
+
+### Consequences
+
+- Developers install `openai` explicitly
+- AgentGauge tracks a deliberate peer range in docs/README
+
+---
+
+## ADR-014: Preserve original OpenAI errors and responses
+
+**Status:** Accepted
+
+### Context
+
+Customers must debug against the real OpenAI SDK contract. Wrapping errors in AgentGaugeError would break `instanceof` checks and status handling.
+
+### Decision
+
+- Successful OpenAI results are returned unchanged
+- OpenAI failures are rethrown as the **same** error object after best-effort `trace.fail`
+- AgentGauge transport failures never replace OpenAI results/errors
+
+### Consequences
+
+- Tests assert identity (`rejects.toBe(openaiError)`)
+- Telemetry remains best-effort relative to the provider call
+
+---
+
 ## ADR template (for future entries)
 
 ```markdown

@@ -1,4 +1,5 @@
 export { AgentGauge, type AgentGaugeConfig, type TransportConfig } from "./agent-gauge.js";
+export { BatchedTransport, type BatchedTransportOptions } from "./batched-transport.js";
 export { ConsoleTransport } from "./console-transport.js";
 export { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
 export type { TraceHandle } from "./trace-handle.js";
