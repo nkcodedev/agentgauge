@@ -1,11 +1,8 @@
 import { ApiError, fetchTraces, fetchTrace } from "@/lib/api-client";
 import { hasServerApiKey } from "@/lib/env";
 import { rangeFromPreset, type RangePreset } from "@/lib/format";
-import { MobileNav, RangeFilter } from "@/components/range-filter";
-import { EmptyState, ErrorBanner, PageHeader } from "@/components/ui";
+import { EmptyState, ErrorBanner, PageHeader, PrivacyBadge } from "@/components/ui";
 import { TracesExplorer } from "@/components/traces-explorer";
-import { Suspense } from "react";
-import { Skeleton } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -29,15 +26,10 @@ export default async function TracesPage({
 
   return (
     <div>
-      <MobileNav />
       <PageHeader
         title="Traces"
-        description="Inspect individual operations. AgentGauge does not store prompts or completions."
-        actions={
-          <Suspense fallback={<Skeleton className="h-9 w-40" />}>
-            <RangeFilter defaultPreset={range} />
-          </Suspense>
-        }
+        description="Inspect individual operations."
+        actions={<PrivacyBadge />}
       />
       <TracesBody
         range={range}
