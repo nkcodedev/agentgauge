@@ -58,6 +58,45 @@ export function formatAbsolute(iso: string): string {
   }).format(d);
 }
 
+export type RunStatus = "running" | "success" | "error" | "cancelled" | "timeout";
+
+export function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  const sec = ms / 1000;
+  if (sec < 60) return `${sec.toFixed(sec < 10 ? 2 : 1)} s`;
+  const min = Math.floor(sec / 60);
+  const remSec = Math.round(sec % 60);
+  if (min < 60) return remSec > 0 ? `${min}m ${remSec}s` : `${min}m`;
+  const hours = Math.floor(min / 60);
+  const remMin = min % 60;
+  return remMin > 0 ? `${hours}h ${remMin}m` : `${hours}h`;
+}
+
+export function formatRunCost(estimatedCost: number, hasUnknownCost: boolean): string {
+  const known = formatCost(estimatedCost);
+  if (!hasUnknownCost) return known;
+  if (estimatedCost === 0) return "Partial: cost unavailable";
+  return `Partial: ${known}`;
+}
+
+export function formatRunStatusLabel(status: string): string {
+  switch (status) {
+    case "running":
+      return "Running";
+    case "success":
+      return "Success";
+    case "error":
+      return "Error";
+    case "cancelled":
+      return "Cancelled";
+    case "timeout":
+      return "Timeout";
+    default:
+      return status;
+  }
+}
+
 export function formatRelative(iso: string, now = Date.now()): string {
   const then = new Date(iso).getTime();
   const deltaSec = Math.round((then - now) / 1000);

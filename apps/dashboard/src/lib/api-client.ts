@@ -59,10 +59,38 @@ export interface AgentSummary {
   averageLatencyMs: number;
 }
 
+export type RunStatus = "running" | "success" | "error" | "cancelled" | "timeout";
+
+export interface RunSummary {
+  id: string;
+  name: string;
+  agentId: string;
+  status: RunStatus | string;
+  startedAt: string;
+  endedAt: string | null;
+  requestCount: number;
+  totalTokens: number;
+  estimatedCost: number;
+  hasUnknownCost: boolean;
+  errorCount: number;
+  retryCount: number;
+  durationMs: number;
+}
+
+export interface RunDetail extends RunSummary {
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  traces?: TraceListItem[];
+}
+
 export interface TraceListItem {
   eventId: string;
   traceId: string;
   agentId: string;
+  runId: string | null;
+  operationId: string | null;
+  attempt: number | null;
   provider: string | null;
   model: string | null;
   operationName: string | null;
@@ -165,6 +193,7 @@ export function fetchTraces(params: {
   from?: string;
   to?: string;
   agentId?: string;
+  runId?: string;
   provider?: string;
   model?: string;
   status?: string;
@@ -175,6 +204,7 @@ export function fetchTraces(params: {
   if (params.from) q.set("from", params.from);
   if (params.to) q.set("to", params.to);
   if (params.agentId) q.set("agentId", params.agentId);
+  if (params.runId) q.set("runId", params.runId);
   if (params.provider) q.set("provider", params.provider);
   if (params.model) q.set("model", params.model);
   if (params.status) q.set("status", params.status);
@@ -182,6 +212,29 @@ export function fetchTraces(params: {
   if (params.cursor) q.set("cursor", params.cursor);
   const qs = q.toString();
   return apiFetch(`/v1/traces${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchRuns(params: {
+  agentId?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  cursor?: string;
+}): Promise<{ data: RunSummary[]; nextCursor: string | null }> {
+  const q = new URLSearchParams();
+  if (params.agentId) q.set("agentId", params.agentId);
+  if (params.status) q.set("status", params.status);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.cursor) q.set("cursor", params.cursor);
+  const qs = q.toString();
+  return apiFetch(`/v1/runs${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchRun(runId: string): Promise<RunDetail> {
+  return apiFetch(`/v1/runs/${encodeURIComponent(runId)}`);
 }
 
 export function fetchTrace(eventId: string): Promise<TraceDetail> {
